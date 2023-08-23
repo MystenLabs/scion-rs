@@ -1,0 +1,139 @@
+name: Rust
+
+on:
+  pull_request:
+  # Run CI on the main branch after every merge.
+  # This is important to fill the GitHub Actions cache in a way that PRs can see it.
+  push:
+    branches:
+      - main
+  # Run CI on the main branch every Sunday.
+  schedule:
+    - cron: '14 3 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation.
+  #
+  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
+  # as it lets the compiler avoid recompiling code that hasn't changed. However,
+  # on CI, we're not making small edits; we're almost always building the entire
+  # project from scratch. Thus, incremental compilation on CI actually
+  # introduces *additional* overhead to support making future builds
+  # faster...but no future builds will ever occur in any given CI environment.
+  #
+  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
+  # for details.
+  CARGO_INCREMENTAL: 0
+  # Allow more retries for network requests in cargo (downloading crates) and
+  # rustup (installing toolchains). This should help to reduce flaky CI failures
+  # from transient network timeouts or other issues.
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # Don't emit giant backtraces in the CI logs.
+  RUST_BACKTRACE: short
+  RUSTDOCFLAGS: -D warnings
+  SUI_TAG: sui-v1.1.1
+
+jobs:
+  diff:
+    runs-on: [ubuntu-ghcloud]
+    outputs:
+      isRust: ${{ steps.diff.outputs.isRust }}
+      isMove: ${{ steps.diff.outputs.isMove }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+
+  test:
+    name: Test Rust code
+    needs: diff
+    if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
+    runs-on: ubuntu-ghcloud
+    steps:
+      - uses: actions/checkout@v3
+      - run: rustup update stable
+      - uses: Swatinem/rust-cache@v2
+        if: github.ref == 'refs/heads/main'
+      - uses: Swatinem/rust-cache@v2
+        if: github.ref != 'refs/heads/main'
+        with:
+          save-if: "false"
+      - run: sudo apt-get install protobuf-compiler
+      - run: cargo test --verbose
+
+  lint:
+    name: Lint Rust code
+    needs: diff
+    if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
+    runs-on: ubuntu-ghcloud
+    steps:
+      - uses: actions/checkout@v3
+      - run: rustup update stable
+      - uses: Swatinem/rust-cache@v2
+        if: github.ref == 'refs/heads/main'
+      - uses: Swatinem/rust-cache@v2
+        if: github.ref != 'refs/heads/main'
+        with:
+          save-if: "false"
+      - run: sudo apt-get install protobuf-compiler
+      - run: cargo install cargo-sort@1.0.9
+      - name: Check formatting with rustfmt
+        run: >
+          cargo fmt --all -- --check
+          --config group_imports=StdExternalCrate,imports_granularity=Crate,imports_layout=HorizontalVertical
+      - name: Check sorting of dependencies
+        run: cargo sort -w -c
+      - name: Lint using clippy
+        run: cargo clippy --all-features --tests --no-deps -- -D warnings
+
+  build:
+    name: Build Rust code
+    needs: diff
+    if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
+    runs-on: ubuntu-ghcloud
+    steps:
+      - uses: actions/checkout@v3
+      - run: rustup update stable
+      - uses: Swatinem/rust-cache@v2
+        if: github.ref == 'refs/heads/main'
+      - uses: Swatinem/rust-cache@v2
+        if: github.ref != 'refs/heads/main'
+        with:
+          save-if: "false"
+      - run: sudo apt-get install protobuf-compiler
+      - name: Build Rust code
+        run: cargo build --verbose
+
+  test-move:
+    name: Test Move code
+    needs: diff
+    if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isMove == 'true' }}
+    runs-on: ubuntu-ghcloud
+    env:
+      SUI_BIN: "/home/runner/.cargo/bin/sui"
+    steps:
+      - uses: actions/checkout@v3
+      - run: rustup update stable
+      - name: Restore cached sui binary
+        id: cache-sui-restore
+        uses: actions/cache/restore@v3
+        with:
+          path: ${{ env.SUI_BIN }}
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ env.SUI_TAG }}
+      - name: Install sui
+        if: steps.cache-sui-restore.outputs.cache-hit != 'true'
+        run: cargo install --locked --git https://github.com/MystenLabs/sui.git --tag $SUI_TAG --debug sui
+      - run: sui move test -p contracts/*
+      - name: Cache sui binary
+        if: ${{ github.ref == 'refs/heads/main' && steps.cache-sui-restore.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v3
+        with:
+          path: ${{ env.SUI_BIN }}
+          key: ${{ steps.cache-sui-restore.outputs.cache-primary-key }}

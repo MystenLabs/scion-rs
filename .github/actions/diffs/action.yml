@@ -1,0 +1,27 @@
+name: Detect Changes
+description: Defines variables indicating the parts of the code that changed
+outputs:
+  isMove:
+    description: True when changes happened to the Move code
+    value: "${{ steps.diff.outputs.isMove }}"
+  isRust:
+    description: True when changes happened to the Rust code
+    value: "${{ steps.diff.outputs.isRust }}"
+
+runs:
+  using: composite
+  steps:
+  - uses: actions/checkout@v3
+  - name: Detect Changes
+    uses: dorny/paths-filter@v2.11.1
+    id: diff
+    with:
+      filters: |
+        isMove:
+          - 'contracts/**'
+          - '.github/workflows/rust.yml'
+        isRust:
+          - 'crates/**'
+          - 'Cargo.toml'
+          - 'Cargo.lock'
+          - '.github/workflows/rust.yml'

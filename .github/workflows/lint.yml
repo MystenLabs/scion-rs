@@ -1,0 +1,30 @@
+name: Lint
+
+on: [pull_request]
+
+jobs:
+  conventional_commit:
+    runs-on: ubuntu-latest
+    name: Check conventional commit messages
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Check commit messages
+        uses: aevea/commitsar@v0.20.1
+      - name: Check PR title
+        uses: amannn/action-semantic-pull-request@v5.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  editorconfig:
+    runs-on: ubuntu-latest
+    name: Check editorconfig
+    steps:
+      - uses: actions/checkout@v3
+      - uses: editorconfig-checker/action-editorconfig-checker@v1.0.0
+  typos:
+    runs-on: ubuntu-latest
+    name: Check spelling
+    steps:
+      - uses: actions/checkout@v3
+      - uses: crate-ci/typos@v1.14.9
