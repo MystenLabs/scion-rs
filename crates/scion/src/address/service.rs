@@ -33,7 +33,7 @@ impl ServiceAddress {
 
     #[allow(unused)]
     /// Special none service address value.
-    const NONE: Self = Self(0xffff);
+    pub(crate) const NONE: Self = Self(0xffff);
     /// Flag bit indicating whether the address includes multicast
     const MULTICAST_FLAG: u16 = 0x8000;
 

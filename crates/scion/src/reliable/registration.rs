@@ -37,6 +37,7 @@ use crate::{
 };
 
 /// A SCION port registration request to the dispatcher.
+#[derive(Debug, Clone)]
 pub(super) struct RegistrationRequest {
     /// The SCION AS in which the application is registering to listen for packets.
     pub isd_asn: IsdAsn,
@@ -50,7 +51,6 @@ pub(super) struct RegistrationRequest {
 
 impl RegistrationRequest {
     /// Return a new registration request for the specified IsdAsn and public address.
-    #[allow(dead_code)]
     pub fn new(isd_asn: IsdAsn, public_address: SocketAddr) -> Self {
         Self {
             isd_asn,
@@ -68,13 +68,11 @@ impl RegistrationRequest {
     }
 
     /// Add the provided associated service address to the request.
-    #[allow(dead_code)]
     pub fn with_associated_service(mut self, address: ServiceAddress) -> Self {
         self.associated_service = Some(address);
         self
     }
 
-    #[allow(dead_code)]
     pub fn encoded_length(&self) -> usize {
         CommonHeader::MIN_LENGTH + self.encoded_request_length()
     }
@@ -84,7 +82,6 @@ impl RegistrationRequest {
     /// # Panics
     ///
     /// Panics if there is not enough space in the buffer to encode the request.
-    #[allow(dead_code)]
     pub fn encode_to(&self, buffer: &mut impl BufMut) {
         self.encode_common_header(buffer);
         self.encode_request(buffer);
@@ -113,7 +110,6 @@ impl RegistrationRequest {
         assert_eq!(written, self.encoded_request_length());
     }
 
-    #[allow(dead_code)]
     #[inline]
     fn encode_common_header(&self, buffer: &mut impl BufMut) {
         CommonHeader {
@@ -155,19 +151,16 @@ impl RegistrationRequest {
 /// this always contains the assigned port number.
 pub(super) struct RegistrationResponse {
     /// The port assigned by the dispatcher.
-    #[allow(dead_code)]
     pub assigned_port: u16,
 }
 
 impl RegistrationResponse {
     /// The length of the encoded registration response.
-    #[allow(dead_code)]
     pub const ENCODED_LENGTH: usize = LAYER4_PORT_OCTETS;
 
     /// Decode a registration response from the provided buffer.
     ///
     /// Returns None if the buffer contains less than 2 bytes.
-    #[allow(dead_code)]
     pub fn decode(buffer: &mut impl Buf) -> Option<Self> {
         if buffer.remaining() >= Self::ENCODED_LENGTH {
             Some(Self {

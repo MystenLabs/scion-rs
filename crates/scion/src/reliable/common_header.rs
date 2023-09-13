@@ -3,14 +3,11 @@ use std::net::{IpAddr, SocketAddr};
 use bytes::{Buf, BufMut};
 use thiserror::Error;
 
-use super::{
-    wire_utils::{encoded_address_and_port_length, IPV6_OCTETS, LAYER4_PORT_OCTETS},
-    ADDRESS_TYPE_OCTETS,
-};
+use super::{wire_utils::encoded_address_and_port_length, ADDRESS_TYPE_OCTETS};
 use crate::address::{HostAddress, HostType};
 
 /// Errors occurring during decoding of packets received over the reliable-relay protocol.
-#[derive(Error, Debug, Eq, PartialEq)]
+#[derive(Error, Debug, Eq, PartialEq, Clone, Copy)]
 pub enum DecodeError {
     /// The decoded packet started with an incorrect token. This indicates a
     /// synchronisation issue with the relay.
@@ -26,21 +23,14 @@ pub enum DecodeError {
 }
 
 /// Partial or fully decoded commonHeader
-#[allow(dead_code)]
+#[derive(Debug)]
 pub(super) enum DecodedHeader {
     Partial(PartialHeader),
     Full(CommonHeader),
 }
 
-impl DecodedHeader {
-    #[allow(dead_code)]
-    pub fn is_fully_decoded(&self) -> bool {
-        matches!(self, DecodedHeader::Full(..))
-    }
-}
-
 /// A partially decoded common header
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(super) struct PartialHeader {
     pub host_type: HostType,
     pub payload_length: u32,
@@ -77,7 +67,6 @@ impl PartialHeader {
     }
 
     /// Number of bytes required to finish decoding the full common header.
-    #[allow(dead_code)]
     pub fn required_bytes(&self) -> usize {
         encoded_address_and_port_length(self.host_type)
     }
@@ -87,7 +76,6 @@ impl PartialHeader {
     /// # Panics
     ///
     /// Panics if there is not at least self.required_bytes() available in the buffer.
-    #[allow(dead_code)]
     pub fn finish_decoding(self, buffer: &mut impl Buf) -> CommonHeader {
         assert!(
             buffer.remaining() >= self.required_bytes(),
@@ -117,9 +105,8 @@ impl PartialHeader {
 /// The header for packets exchange between the client and relay.
 #[derive(Default, Debug, Copy, Clone)]
 pub(super) struct CommonHeader {
-    /// The destination to which to relay the packet (when sent), or the client's address
+    /// The destination to which to relay the packet (when sent), or the last hop
     /// when receiving.
-    // TODO(jsmith): Need to check if this is always the client's address
     pub destination: Option<SocketAddr>,
     /// The length of the associated payload.
     pub payload_length: u32,
@@ -129,21 +116,12 @@ impl CommonHeader {
     /// The minimum length of a common header.
     pub const MIN_LENGTH: usize =
         Self::COOKIE_LENGTH + ADDRESS_TYPE_OCTETS + Self::PAYLOAD_SIZE_LENGTH;
-    #[allow(dead_code)]
-    /// The maximum length of the common header.
-    pub const MAX_LENGTH: usize = Self::MIN_LENGTH + IPV6_OCTETS + LAYER4_PORT_OCTETS;
 
     const COOKIE: u64 = 0xde00ad01be02ef03;
     const COOKIE_LENGTH: usize = 8;
     const PAYLOAD_SIZE_LENGTH: usize = 4;
 
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// The size of the payload as a usize.
-    #[allow(dead_code)]
     #[inline]
     pub fn payload_size(&self) -> usize {
         self.payload_length
@@ -191,8 +169,7 @@ impl CommonHeader {
     ///
     /// Panics if there is not at least [`CommonHeader::MIN_LENGTH`] bytes available
     /// in the buffer.
-    #[allow(dead_code)]
-    pub fn partial_decode(buffer: &mut impl Buf) -> Result<DecodedHeader, DecodeError> {
+    pub fn decode(buffer: &mut impl Buf) -> Result<DecodedHeader, DecodeError> {
         assert!(
             buffer.remaining() >= CommonHeader::MIN_LENGTH,
             "insufficient data"
@@ -205,18 +182,6 @@ impl CommonHeader {
         } else {
             Ok(DecodedHeader::Partial(partial_header))
         }
-    }
-
-    /// Decode the full common header form the buffer.
-    ///
-    /// # Panics
-    ///
-    /// Panics if there is insufficient data in the buffer to decode the entire header.
-    /// To avoid the panic, ensure there is [`Self::MAX_LENGTH`] bytes available, or
-    /// use [`Self::partial_decode()`] instead.
-    #[allow(dead_code)]
-    pub fn decode(buffer: &mut impl Buf) -> Result<Self, DecodeError> {
-        PartialHeader::decode(buffer).map(|header| header.finish_decoding(buffer))
     }
 }
 
@@ -326,37 +291,20 @@ mod tests {
             DecodeError::InvalidAddressType(3)
         );
 
-        macro_rules! test_decode_panic {
-            ($name:ident, $buffer:expr) => {
-                #[test]
-                #[should_panic(expected = "insufficient data")]
-                fn $name() {
-                    let mut buffer = Bytes::copy_from_slice($buffer.as_slice());
-                    let _ = CommonHeader::decode(&mut buffer);
-                }
-            };
+        #[test]
+        #[should_panic(expected = "insufficient data")]
+        fn incomplete_header() {
+            let mut buffer = Bytes::copy_from_slice([0xaa].as_slice());
+            let _ = CommonHeader::decode(&mut buffer);
         }
 
-        test_decode_panic!(incomplete_header, [0xaa]);
-
-        test_decode_panic!(
-            incomplete_header_address,
-            [0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 0, 10, 2, 3]
-        );
-
-        test_decode_panic!(
-            incomplete_header_port,
-            [0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 0, 10, 2, 3, 4, 0]
-        );
-
         #[test]
-        fn partial_decode_incomplete_address() {
+        fn decode_incomplete_address() {
             let mut buffer = Bytes::copy_from_slice(&[
                 0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 0, 10, 2, 3,
             ]);
 
-            let Ok(DecodedHeader::Partial(header)) = CommonHeader::partial_decode(&mut buffer)
-            else {
+            let Ok(DecodedHeader::Partial(header)) = CommonHeader::decode(&mut buffer) else {
                 panic!("expected successful partial decode");
             };
 
@@ -369,7 +317,9 @@ mod tests {
                 #[test]
                 fn $name() {
                     let mut buffer = Bytes::copy_from_slice($buffer.as_slice());
-                    let header = CommonHeader::decode(&mut buffer).unwrap();
+                    let Ok(DecodedHeader::Full(header)) = CommonHeader::decode(&mut buffer) else {
+                        panic!("expected a successful full decode");
+                    };
 
                     assert_eq!(header.destination, $expected_header.destination);
                     assert_eq!(header.payload_length, $expected_header.payload_length);
