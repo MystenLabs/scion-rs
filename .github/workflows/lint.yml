@@ -27,4 +27,4 @@ jobs:
     name: Check spelling
     steps:
       - uses: actions/checkout@v3
-      - uses: crate-ci/typos@v1.14.9
+      - uses: crate-ci/typos@v1.16.11
