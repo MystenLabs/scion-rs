@@ -46,7 +46,7 @@ jobs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
@@ -57,7 +57,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-ghcloud
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: rustup update stable
       - uses: Swatinem/rust-cache@v2
         if: github.ref == 'refs/heads/main'
@@ -74,7 +74,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-ghcloud
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: rustup update stable
       - uses: Swatinem/rust-cache@v2
         if: github.ref == 'refs/heads/main'
@@ -99,7 +99,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-ghcloud
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: rustup update stable
       - uses: Swatinem/rust-cache@v2
         if: github.ref == 'refs/heads/main'
@@ -119,7 +119,7 @@ jobs:
     env:
       SUI_BIN: "/home/runner/.cargo/bin/sui"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: rustup update stable
       - name: Restore cached sui binary
         id: cache-sui-restore

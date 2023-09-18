@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Check conventional commit messages
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Check commit messages
@@ -20,11 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     name: Check editorconfig
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: editorconfig-checker/action-editorconfig-checker@v1.0.0
   typos:
     runs-on: ubuntu-latest
     name: Check spelling
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: crate-ci/typos@v1.14.9
