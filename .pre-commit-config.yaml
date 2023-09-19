@@ -1,0 +1,49 @@
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v2.3.0
+  hooks:
+  - id: check-yaml
+  - id: trailing-whitespace
+- repo: https://github.com/editorconfig-checker/editorconfig-checker.python
+  rev: "2.7.1"
+  hooks:
+  - id: editorconfig-checker
+    alias: ec
+- repo: local
+  hooks:
+  - id: cargo-fmt
+    name: cargo-fmt
+    entry: cargo fmt
+    args:
+    - "--"
+    - "--config"
+    - "group_imports=StdExternalCrate,imports_granularity=Crate,imports_layout=HorizontalVertical"
+    language: system
+    types: [rust]
+    pass_filenames: false
+  - id: cargo-sort
+    name: cargo-sort
+    entry: cargo sort
+    args: ["-w"]
+    language: rust
+    types: [rust]
+    pass_filenames: false
+  - id: cargo-check
+    name: cargo-check
+    entry: cargo check
+    language: system
+    types: [rust]
+    pass_filenames: false
+  - id: cargo-test
+    name: cargo-test
+    entry: cargo test
+    language: system
+    types: [rust]
+    pass_filenames: false
+  - id: clippy
+    name: clippy
+    entry: cargo clippy
+    args: ["--all-features", "--tests", "--", "-D", "warnings"]
+    language: system
+    types: [rust]
+    pass_filenames: false
