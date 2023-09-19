@@ -1,0 +1,6 @@
+# GitHub configuration
+.github/        @mlegner
+
+# Rust code
+Cargo.*
+crates/         @jpcsmith @mlegner
