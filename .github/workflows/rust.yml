@@ -17,6 +17,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CLICOLOR_FORCE: 1
   # Disable incremental compilation.
   #
   # Incremental compilation is useful as part of an edit-build-test-edit cycle,
@@ -37,27 +38,39 @@ env:
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
   RUSTDOCFLAGS: -D warnings
-  SUI_TAG: sui-v1.1.1
 
 jobs:
   diff:
     runs-on: [ubuntu-ghcloud]
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
-      isMove: ${{ steps.diff.outputs.isMove }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Detect Changes
-        uses: "./.github/actions/diffs"
+        uses: dorny/paths-filter@v2.11.1
         id: diff
+        with:
+          filters: |
+            isRust:
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain'
+              - '.github/workflows/rust.yml'
 
   test:
-    name: Test Rust code
+    name: Test Rust code and report coverage
     needs: diff
     if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-ghcloud
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: rustup update stable
       - uses: Swatinem/rust-cache@v2
         if: github.ref == 'refs/heads/main'
@@ -65,8 +78,33 @@ jobs:
         if: github.ref != 'refs/heads/main'
         with:
           save-if: "false"
-      - run: sudo apt-get install protobuf-compiler
-      - run: cargo test --verbose
+      - run: cargo install cargo-tarpaulin@0.26.1
+
+      - name: Run tests and record coverage
+        run: cargo tarpaulin --workspace --skip-clean --out html --out xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: Coverage report
+          path: tarpaulin-report.html
+      - name: Code-coverage report
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: cobertura.xml
+          badge: true
+          fail_below_min: false
+          format: markdown
+          hide_branch_rate: false
+          hide_complexity: true
+          indicators: true
+          output: both
+          thresholds: '50 75'
+      - name: Add coverage PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: ${{ github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
+        with:
+          path: code-coverage-results.md
 
   lint:
     name: Lint Rust code
@@ -74,7 +112,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-ghcloud
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: rustup update stable
       - uses: Swatinem/rust-cache@v2
         if: github.ref == 'refs/heads/main'
@@ -82,7 +120,6 @@ jobs:
         if: github.ref != 'refs/heads/main'
         with:
           save-if: "false"
-      - run: sudo apt-get install protobuf-compiler
       - run: cargo install cargo-sort@1.0.9
       - name: Check formatting with rustfmt
         run: >
@@ -99,7 +136,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-ghcloud
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: rustup update stable
       - uses: Swatinem/rust-cache@v2
         if: github.ref == 'refs/heads/main'
@@ -107,33 +144,21 @@ jobs:
         if: github.ref != 'refs/heads/main'
         with:
           save-if: "false"
-      - run: sudo apt-get install protobuf-compiler
       - name: Build Rust code
         run: cargo build --verbose
 
-  test-move:
-    name: Test Move code
-    needs: diff
-    if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isMove == 'true' }}
-    runs-on: ubuntu-ghcloud
-    env:
-      SUI_BIN: "/home/runner/.cargo/bin/sui"
+  check-all:
+    name: Check if all Rust jobs succeeded
+    if: always()
+    needs:
+      - diff
+      - test
+      - lint
+      - build
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - run: rustup update stable
-      - name: Restore cached sui binary
-        id: cache-sui-restore
-        uses: actions/cache/restore@v3
-        with:
-          path: ${{ env.SUI_BIN }}
-          key: ${{ runner.os }}-${{ runner.arch }}-${{ env.SUI_TAG }}
-      - name: Install sui
-        if: steps.cache-sui-restore.outputs.cache-hit != 'true'
-        run: cargo install --locked --git https://github.com/MystenLabs/sui.git --tag $SUI_TAG --debug sui
-      - run: sui move test -p contracts/*
-      - name: Cache sui binary
-        if: ${{ github.ref == 'refs/heads/main' && steps.cache-sui-restore.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v3
-        with:
-          path: ${{ env.SUI_BIN }}
-          key: ${{ steps.cache-sui-restore.outputs.cache-primary-key }}
+    - name: Decide whether all needed jobs succeeded
+      uses: re-actors/alls-green@release/v1
+      with:
+        allowed-skips: test, lint, build
+        jobs: ${{ toJSON(needs) }}

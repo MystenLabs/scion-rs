@@ -2,29 +2,51 @@ name: Lint
 
 on: [pull_request]
 
+permissions:
+  contents: read
+
 jobs:
-  conventional_commit:
+  conventional-commits:
     runs-on: ubuntu-latest
     name: Check conventional commit messages
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Check commit messages
-        uses: aevea/commitsar@v0.20.1
+        uses: aevea/commitsar@v0.20.2
       - name: Check PR title
         uses: amannn/action-semantic-pull-request@v5.2.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   editorconfig:
     runs-on: ubuntu-latest
     name: Check editorconfig
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: editorconfig-checker/action-editorconfig-checker@v1.0.0
+
   typos:
     runs-on: ubuntu-latest
     name: Check spelling
     steps:
-      - uses: actions/checkout@v3
-      - uses: crate-ci/typos@v1.14.9
+      - uses: actions/checkout@v4
+      - uses: crate-ci/typos@v1.16.11
+
+  check-all:
+    name: Check if all lint jobs succeeded
+    if: always()
+    needs:
+      - conventional-commits
+      - editorconfig
+      - typos
+    runs-on: ubuntu-latest
+    steps:
+    - name: Decide whether all needed jobs succeeded
+      uses: re-actors/alls-green@release/v1
+      with:
+        jobs: ${{ toJSON(needs) }}
