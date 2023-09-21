@@ -5,6 +5,8 @@ use std::{
 
 use thiserror;
 
+use super::{HostAddress, HostType};
+
 /// A SCION service address.
 ///
 /// A service address is a short identifier used to send anycast or multicast
@@ -115,6 +117,12 @@ impl Display for ServiceAddress {
         }
 
         Ok(())
+    }
+}
+
+impl HostAddress for ServiceAddress {
+    fn host_address_type(&self) -> HostType {
+        HostType::Svc
     }
 }
 

@@ -12,6 +12,9 @@ pub use ia::IsdAsn;
 mod service;
 pub use service::{ParseServiceAddressError, ServiceAddress};
 
+mod host;
+pub use host::{Host, HostAddress, HostType};
+
 #[derive(Eq, PartialEq, Clone, Debug, thiserror::Error)]
 pub enum AddressParseError {
     #[error("AS number out of range, expected at most 2^48 - 1")]
