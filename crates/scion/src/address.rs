@@ -9,6 +9,9 @@ pub use isd::Isd;
 mod ia;
 pub use ia::IA;
 
+mod service;
+pub use service::{ParseServiceAddressError, ServiceAddress};
+
 #[derive(Eq, PartialEq, Clone, Debug, thiserror::Error)]
 pub enum AddressParseError {
     #[error("AS number out of range, expected at most 2^48 - 1")]

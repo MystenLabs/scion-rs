@@ -8,7 +8,7 @@ use super::AddressParseError;
 /// Identifier of a SCION Isolation Domain
 ///
 /// See formatting and allocations here:
-/// https://github.com/scionproto/scion/wiki/ISD-and-AS-numbering#isd-numbers
+/// <https://github.com/scionproto/scion/wiki/ISD-and-AS-numbering#isd-numbers>
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Isd(u16);
 
@@ -19,7 +19,7 @@ impl Isd {
     pub const BITS: u32 = u16::BITS;
 
     /// Create a new ISD from a 16-bit value.
-    pub fn new(id: u16) -> Self {
+    pub const fn new(id: u16) -> Self {
         Self(id)
     }
 
