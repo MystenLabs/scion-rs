@@ -28,14 +28,14 @@ jobs:
     name: Check editorconfig
     steps:
       - uses: actions/checkout@v4
-      - uses: editorconfig-checker/action-editorconfig-checker@v1.0.0
+      - uses: editorconfig-checker/action-editorconfig-checker@v2.0.0
 
   typos:
     runs-on: ubuntu-latest
     name: Check spelling
     steps:
       - uses: actions/checkout@v4
-      - uses: crate-ci/typos@v1.16.12
+      - uses: crate-ci/typos@v1.16.13
 
   check-all:
     name: Check if all lint jobs succeeded
