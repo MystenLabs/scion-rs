@@ -32,6 +32,15 @@ impl IA {
     }
 
     /// Return true if either the ISD or AS numbers are wildcards
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use scion::address::{Asn,IA,Isd};
+    /// assert!(IA::new(Isd::WILDCARD,Asn::new(1)).is_wildcard());
+    /// assert!(IA::new(Isd::new(1),Asn::WILDCARD).is_wildcard());
+    /// assert!(!IA::new(Isd::new(1),Asn::new(1)).is_wildcard());
+    /// ```
     pub fn is_wildcard(&self) -> bool {
         self.isd().is_wildcard() || self.asn().is_wildcard()
     }
@@ -66,11 +75,10 @@ impl FromStr for IA {
             return Err(Self::Err::InvalidIaString(string.into()));
         }
 
-        if let Some((isd_str, asn_str)) = string.split_once('-') {
-            Ok(IA::new(Isd::from_str(isd_str)?, Asn::from_str(asn_str)?))
-        } else {
-            Err(Self::Err::InvalidIaString(string.into()))
-        }
+        let (isd_str, asn_str) = string
+            .split_once('-')
+            .expect("already checked that the string contains exactly one '-'");
+        Ok(IA::new(Isd::from_str(isd_str)?, Asn::from_str(asn_str)?))
     }
 }
 
@@ -142,8 +150,41 @@ mod tests {
         Asn::new(0xffff_ffff_ffff)
     );
 
+    mod conversion {
+        use super::*;
+
+        #[test]
+        fn as_u64() {
+            assert_eq!(
+                IA::new(Isd::new(0x0123), Asn::new(0x4567_89ab_cdef)).as_u64(),
+                0x0123_4567_89ab_cdef
+            )
+        }
+
+        macro_rules! test_success {
+            ($name:ident, $number:expr, $ia:expr) => {
+                #[test]
+                fn $name() {
+                    assert_eq!(IA::from($number), $ia);
+                    assert_eq!(u64::from($ia), $number);
+                }
+            };
+        }
+
+        test_success!(wildcard, 0, IA::new(Isd::WILDCARD, Asn::WILDCARD));
+        test_success!(max_value, -1_i64 as u64, IA(0xffff_ffff_ffff_ffff));
+    }
+
     mod display {
         use super::*;
+
+        #[test]
+        fn debug() {
+            assert_eq!(
+                format!("{:?}", IA(0x0001_ff00_0000_00ab)),
+                "IA(0x0001ff00000000ab)"
+            );
+        }
 
         #[test]
         fn simple() {
@@ -172,6 +213,7 @@ mod tests {
                 #[test]
                 fn $name() {
                     assert_eq!(IA::from_str($input).unwrap(), $expected);
+                    assert_eq!(IA::try_from($input.to_string()).unwrap(), $expected);
                 }
             };
         }
