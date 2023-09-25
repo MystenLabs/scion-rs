@@ -45,7 +45,7 @@ To analyze test coverage, we use [Tarpaulin](https://crates.io/crates/cargo-tarp
 
 ```sh
 cargo install cargo-tarpaulin
-cargo tarpaulin --workspace --out html
+cargo tarpaulin --workspace --all-targets --doc --out html
 ```
 
 This creates a file `tarpaulin-report.html`, which shows you coverage statistics as well as which individual lines are or aren't covered by tests.

@@ -90,6 +90,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    env:
+      RUSTC_BOOTSTRAP: 1
     steps:
       - uses: actions/checkout@v4
       - run: rustup update stable
@@ -102,7 +104,7 @@ jobs:
       - run: cargo install cargo-tarpaulin@0.26.1
 
       - name: Run tests and record coverage
-        run: cargo tarpaulin --workspace --skip-clean --out html --out xml
+        run: cargo tarpaulin --workspace --skip-clean --all-targets --doc --out html --out xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v3
