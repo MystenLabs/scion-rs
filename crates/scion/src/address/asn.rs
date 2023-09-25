@@ -34,6 +34,14 @@ impl Asn {
     }
 
     /// Return true for the special 'wildcard' AS number, 0.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use scion::address::Asn;
+    /// assert!(Asn::WILDCARD.is_wildcard());
+    /// assert!(!Asn::new(1).is_wildcard());
+    /// ```
     pub fn is_wildcard(&self) -> bool {
         self == &Self::WILDCARD
     }
@@ -119,6 +127,31 @@ impl FromStr for Asn {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod conversion {
+        use super::*;
+
+        macro_rules! test_success {
+            ($name:ident, $number:expr, $asn:expr) => {
+                #[test]
+                fn $name() {
+                    assert_eq!(Asn::try_from($number).unwrap(), $asn);
+                    assert_eq!(u64::from($asn), $number);
+                }
+            };
+        }
+
+        test_success!(wildcard, 0, Asn::WILDCARD);
+        test_success!(max_value, Asn::MAX_VALUE, Asn(0xffff_ffff_ffff));
+
+        #[test]
+        fn out_of_range() {
+            assert_eq!(
+                Asn::try_from(Asn::MAX_VALUE + 1).unwrap_err(),
+                AddressParseError::AsnOutOfRange
+            );
+        }
+    }
 
     mod parse {
         use super::*;

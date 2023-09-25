@@ -28,7 +28,15 @@ impl Isd {
         self.0
     }
 
-    // Return true for the special 'wildcard' AS number
+    /// Return true for the special 'wildcard' AS number
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use scion::address::Isd;
+    /// assert!(Isd::WILDCARD.is_wildcard());
+    /// assert!(!Isd::new(1).is_wildcard());
+    /// ```
     pub fn is_wildcard(&self) -> bool {
         self == &Self::WILDCARD
     }
@@ -51,6 +59,20 @@ impl FromStr for Isd {
             Ok(Isd::new(value))
         } else {
             Err(Self::Err::InvalidIsdString(string.into()))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod display {
+        use super::*;
+
+        #[test]
+        fn wildcard() {
+            assert_eq!(Isd::WILDCARD.to_string(), "0");
         }
     }
 }
