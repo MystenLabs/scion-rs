@@ -61,6 +61,27 @@ jobs:
               - 'rust-toolchain'
               - '.github/workflows/rust.yml'
 
+  dependencies:
+    name: Check dependencies
+    needs: diff
+    if: ${{ needs.diff.outputs.isRust == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          # do not check advisories to prevent sudden failure due to new announcement
+          command: check bans licenses sources
+
+  dependencies-schedule:
+    name: Check dependencies (including vulnerabilities)
+    needs: diff
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: EmbarkStudios/cargo-deny-action@v1
+
   test:
     name: Test Rust code and report coverage
     needs: diff
@@ -152,6 +173,7 @@ jobs:
     if: always()
     needs:
       - diff
+      - dependencies
       - test
       - lint
       - build
@@ -160,5 +182,5 @@ jobs:
     - name: Decide whether all needed jobs succeeded
       uses: re-actors/alls-green@release/v1
       with:
-        allowed-skips: test, lint, build
+        allowed-skips: ${{ toJSON(needs) }}
         jobs: ${{ toJSON(needs) }}

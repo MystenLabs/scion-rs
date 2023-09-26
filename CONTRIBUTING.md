@@ -27,6 +27,7 @@ We have CI jobs running for every PR to test and lint the repository. You can in
 that these check pass even *before pushing your changes* to GitHub. To use this, the following steps are required:
 
 1. Install [Rust](https://www.rust-lang.org/tools/install).
+1. Install [cargo-deny](https://embarkstudios.github.io/cargo-deny/cli/index.html).
 1. [Install pre-commit](https://pre-commit.com/#install) using `pip` or your OS's package manager.
 1. Run `pre-commit install` in the repository.
 

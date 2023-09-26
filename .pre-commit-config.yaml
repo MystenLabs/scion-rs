@@ -47,3 +47,10 @@ repos:
     language: system
     types: [rust]
     pass_filenames: false
+  - id: deny
+    name: cargo-deny
+    entry: cargo deny
+    args: ["--all-features", "check"]
+    language: system
+    types: [rust]
+    pass_filenames: false
