@@ -7,7 +7,7 @@ mod isd;
 pub use isd::Isd;
 
 mod ia;
-pub use ia::IA;
+pub use ia::IsdAsn;
 
 mod service;
 pub use service::{ParseServiceAddressError, ServiceAddress};

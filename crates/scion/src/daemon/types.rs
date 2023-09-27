@@ -1,9 +1,9 @@
-use crate::address::IA;
+use crate::address::IsdAsn;
 
 /// Information about the local AS
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct AsInfo {
-    pub ia: IA,
+    pub ia: IsdAsn,
     pub mtu: u16,
 }
 
