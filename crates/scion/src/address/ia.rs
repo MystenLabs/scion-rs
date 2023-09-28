@@ -7,12 +7,12 @@ use serde::Deserialize;
 
 use super::{AddressParseError, Asn, Isd};
 
-/// The combined ISD and AS identifier of a SCION AS.
+/// The combined ISD and AS identifier of a SCION AS (sometimes abbreviated as IA).
 #[derive(Copy, Clone, Eq, PartialEq, Deserialize, Hash)]
 #[serde(try_from = "String")]
-pub struct IA(u64);
+pub struct IsdAsn(u64);
 
-impl IA {
+impl IsdAsn {
     /// A SCION IA of the special wildcard IA, 0-0.
     pub const WILDCARD: Self = Self(0);
 
@@ -36,10 +36,10 @@ impl IA {
     /// # Examples
     ///
     /// ```
-    /// # use scion::address::{Asn,IA,Isd};
-    /// assert!(IA::new(Isd::WILDCARD,Asn::new(1)).is_wildcard());
-    /// assert!(IA::new(Isd::new(1),Asn::WILDCARD).is_wildcard());
-    /// assert!(!IA::new(Isd::new(1),Asn::new(1)).is_wildcard());
+    /// # use scion::address::{Asn,IsdAsn,Isd};
+    /// assert!(IsdAsn::new(Isd::WILDCARD,Asn::new(1)).is_wildcard());
+    /// assert!(IsdAsn::new(Isd::new(1),Asn::WILDCARD).is_wildcard());
+    /// assert!(!IsdAsn::new(Isd::new(1),Asn::new(1)).is_wildcard());
     /// ```
     pub fn is_wildcard(&self) -> bool {
         self.isd().is_wildcard() || self.asn().is_wildcard()
@@ -54,19 +54,19 @@ impl IA {
     }
 }
 
-impl Debug for IA {
+impl Debug for IsdAsn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("IA({:#018x})", self.0))
     }
 }
 
-impl Display for IA {
+impl Display for IsdAsn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}-{}", self.isd(), self.asn())
     }
 }
 
-impl FromStr for IA {
+impl FromStr for IsdAsn {
     type Err = AddressParseError;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
@@ -78,11 +78,14 @@ impl FromStr for IA {
         let (isd_str, asn_str) = string
             .split_once('-')
             .expect("already checked that the string contains exactly one '-'");
-        Ok(IA::new(Isd::from_str(isd_str)?, Asn::from_str(asn_str)?))
+        Ok(IsdAsn::new(
+            Isd::from_str(isd_str)?,
+            Asn::from_str(asn_str)?,
+        ))
     }
 }
 
-impl TryFrom<String> for IA {
+impl TryFrom<String> for IsdAsn {
     type Error = AddressParseError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -90,15 +93,15 @@ impl TryFrom<String> for IA {
     }
 }
 
-impl From<IA> for u64 {
-    fn from(value: IA) -> Self {
+impl From<IsdAsn> for u64 {
+    fn from(value: IsdAsn) -> Self {
         value.as_u64()
     }
 }
 
-impl From<u64> for IA {
+impl From<u64> for IsdAsn {
     fn from(value: u64) -> Self {
-        IA(value)
+        IsdAsn(value)
     }
 }
 
@@ -114,7 +117,7 @@ mod tests {
 
                 #[test]
                 fn construct() {
-                    assert_eq!($ia, IA::new($isd, $asn));
+                    assert_eq!($ia, IsdAsn::new($isd, $asn));
                 }
 
                 #[test]
@@ -130,22 +133,22 @@ mod tests {
         };
     }
 
-    test_new_and_get!(wildcard, IA(0), Isd::new(0), Asn::new(0));
+    test_new_and_get!(wildcard, IsdAsn(0), Isd::new(0), Asn::new(0));
     test_new_and_get!(
         long,
-        IA(0x0001_ff00_0000_00ab),
+        IsdAsn(0x0001_ff00_0000_00ab),
         Isd::new(1),
         Asn::new(0xff00_0000_00ab)
     );
     test_new_and_get!(
         max_and_min,
-        IA(0xffff_0000_0000_0000),
+        IsdAsn(0xffff_0000_0000_0000),
         Isd::new(0xffff),
         Asn::new(0)
     );
     test_new_and_get!(
         min_and_max,
-        IA(0x0000_ffff_ffff_ffff),
+        IsdAsn(0x0000_ffff_ffff_ffff),
         Isd::new(0),
         Asn::new(0xffff_ffff_ffff)
     );
@@ -156,7 +159,7 @@ mod tests {
         #[test]
         fn as_u64() {
             assert_eq!(
-                IA::new(Isd::new(0x0123), Asn::new(0x4567_89ab_cdef)).as_u64(),
+                IsdAsn::new(Isd::new(0x0123), Asn::new(0x4567_89ab_cdef)).as_u64(),
                 0x0123_4567_89ab_cdef
             )
         }
@@ -165,14 +168,14 @@ mod tests {
             ($name:ident, $number:expr, $ia:expr) => {
                 #[test]
                 fn $name() {
-                    assert_eq!(IA::from($number), $ia);
+                    assert_eq!(IsdAsn::from($number), $ia);
                     assert_eq!(u64::from($ia), $number);
                 }
             };
         }
 
-        test_success!(wildcard, 0, IA::new(Isd::WILDCARD, Asn::WILDCARD));
-        test_success!(max_value, -1_i64 as u64, IA(0xffff_ffff_ffff_ffff));
+        test_success!(wildcard, 0, IsdAsn::new(Isd::WILDCARD, Asn::WILDCARD));
+        test_success!(max_value, -1_i64 as u64, IsdAsn(0xffff_ffff_ffff_ffff));
     }
 
     mod display {
@@ -181,25 +184,25 @@ mod tests {
         #[test]
         fn debug() {
             assert_eq!(
-                format!("{:?}", IA(0x0001_ff00_0000_00ab)),
+                format!("{:?}", IsdAsn(0x0001_ff00_0000_00ab)),
                 "IA(0x0001ff00000000ab)"
             );
         }
 
         #[test]
         fn simple() {
-            assert_eq!(IA(0x0001_ff00_0000_00ab).to_string(), "1-ff00:0:ab");
+            assert_eq!(IsdAsn(0x0001_ff00_0000_00ab).to_string(), "1-ff00:0:ab");
         }
 
         #[test]
         fn wildcard() {
-            assert_eq!(IA(0).to_string(), "0-0");
+            assert_eq!(IsdAsn(0).to_string(), "0-0");
         }
 
         #[test]
         fn max_ia() {
             assert_eq!(
-                IA(0xffff_ffff_ffff_ffff).to_string(),
+                IsdAsn(0xffff_ffff_ffff_ffff).to_string(),
                 "65535-ffff:ffff:ffff"
             );
         }
@@ -212,20 +215,20 @@ mod tests {
             ($name:ident, $input:expr, $expected:expr) => {
                 #[test]
                 fn $name() {
-                    assert_eq!(IA::from_str($input).unwrap(), $expected);
-                    assert_eq!(IA::try_from($input.to_string()).unwrap(), $expected);
+                    assert_eq!(IsdAsn::from_str($input).unwrap(), $expected);
+                    assert_eq!(IsdAsn::try_from($input.to_string()).unwrap(), $expected);
                 }
             };
         }
 
-        test_success!(max, "65535-ffff:ffff:ffff", IA(0xffff_ffff_ffff_ffff));
-        test_success!(wildcard, "0-0", IA::WILDCARD);
-        test_success!(min_non_wildcard, "1-0:0:1", IA(0x0001_0000_0000_0001));
+        test_success!(max, "65535-ffff:ffff:ffff", IsdAsn(0xffff_ffff_ffff_ffff));
+        test_success!(wildcard, "0-0", IsdAsn::WILDCARD);
+        test_success!(min_non_wildcard, "1-0:0:1", IsdAsn(0x0001_0000_0000_0001));
 
         #[test]
         fn invalid() {
             assert_eq!(
-                IA::from_str("a-0:0:1").unwrap_err(),
+                IsdAsn::from_str("a-0:0:1").unwrap_err(),
                 AddressParseError::InvalidIsdString("a".into())
             );
         }
@@ -233,7 +236,7 @@ mod tests {
         #[test]
         fn invalid_parts() {
             assert_eq!(
-                IA::from_str("1-1-0:0:1").unwrap_err(),
+                IsdAsn::from_str("1-1-0:0:1").unwrap_err(),
                 AddressParseError::InvalidIaString("1-1-0:0:1".into())
             );
         }
