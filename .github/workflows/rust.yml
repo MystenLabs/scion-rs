@@ -67,7 +67,7 @@ jobs:
     if: ${{ needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v1
         with:
           # do not check advisories to prevent sudden failure due to new announcement
@@ -79,7 +79,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v1
 
   test:
