@@ -101,6 +101,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         with:
           save-if: "false"
+      - run: sudo apt-get install protobuf-compiler
       - run: cargo install cargo-tarpaulin@0.26.1
 
       - name: Run tests and record coverage
@@ -143,6 +144,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         with:
           save-if: "false"
+      - run: sudo apt-get install protobuf-compiler
       - run: cargo install cargo-sort@1.0.9
       - name: Check formatting with rustfmt
         run: >
@@ -167,6 +169,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         with:
           save-if: "false"
+      - run: sudo apt-get install protobuf-compiler
       - name: Build Rust code
         run: cargo build --verbose
 

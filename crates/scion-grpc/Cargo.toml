@@ -1,0 +1,13 @@
+[package]
+name = "scion-grpc"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+prost = "0.12.1"
+prost-types = "0.12.1"
+tonic = "0.10.2"
+
+[build-dependencies]
+tonic-build = "0.10.2"

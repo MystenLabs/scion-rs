@@ -8,7 +8,22 @@ workflow](./CONTRIBUTING.md).
 
 ## Prerequisites
 
+### Ubuntu
+
 ```sh
+# Install C/C++ compilers, protobuf, SQLite3, clang
+sudo apt install -y build-essential protobuf-compiler libsqlite3-dev llvm-dev libclang-dev clang
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+### Mac
+
+```sh
+# Install Homebrew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+# Install protobuf
+brew install protobuf
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
