@@ -28,6 +28,9 @@ impl ServiceAddress {
     /// Wildcard service address (Wildcard_A)
     pub const WILDCARD: Self = Self(0x0010);
 
+    /// The encoded length of the address.
+    pub(crate) const ENCODED_LENGTH: usize = 2;
+
     #[allow(unused)]
     /// Special none service address value.
     const NONE: Self = Self(0xffff);

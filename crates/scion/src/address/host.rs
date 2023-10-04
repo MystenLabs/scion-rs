@@ -45,6 +45,12 @@ impl HostType {
     }
 }
 
+impl From<HostType> for u8 {
+    fn from(value: HostType) -> Self {
+        value as u8
+    }
+}
+
 /// Trait to be implemented by address types that are supported by SCION
 /// as valid AS-host addresses.
 pub trait HostAddress {
