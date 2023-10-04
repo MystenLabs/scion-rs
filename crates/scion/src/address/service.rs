@@ -106,6 +106,12 @@ impl FromStr for ServiceAddress {
     }
 }
 
+impl From<ServiceAddress> for u16 {
+    fn from(value: ServiceAddress) -> Self {
+        value.0
+    }
+}
+
 impl Display for ServiceAddress {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.anycast() {
