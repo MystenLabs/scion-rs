@@ -150,10 +150,7 @@ impl CommonHeader {
 
     /// The number of bytes in the encoded common header.
     pub fn encoded_length(&self) -> usize {
-        Self::COOKIE_LENGTH
-            + ADDRESS_TYPE_OCTETS
-            + Self::PAYLOAD_SIZE_LENGTH
-            + encoded_address_and_port_length(self.destination.host_address_type())
+        Self::MIN_LENGTH + encoded_address_and_port_length(self.destination.host_address_type())
     }
 
     /// Serialize a common header to the provided buffer.
