@@ -152,7 +152,9 @@ jobs:
           --config group_imports=StdExternalCrate,imports_granularity=Crate,imports_layout=HorizontalVertical
       - name: Check sorting of dependencies
         run: cargo sort -w -c
-      - name: Lint using clippy
+      - name: Lint using clippy (w/o tests)
+        run: cargo clippy --all-features --no-deps -- -D warnings
+      - name: Lint using clippy (w/ tests)
         run: cargo clippy --all-features --tests --no-deps -- -D warnings
 
   build:

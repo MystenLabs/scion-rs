@@ -50,6 +50,7 @@ pub(super) struct RegistrationRequest {
 
 impl RegistrationRequest {
     /// Return a new registration request for the specified IsdAsn and public address.
+    #[allow(dead_code)]
     pub fn new(isd_asn: IsdAsn, public_address: SocketAddr) -> Self {
         Self {
             isd_asn,
@@ -67,6 +68,7 @@ impl RegistrationRequest {
     }
 
     /// Add the provided associated service address to the request.
+    #[allow(dead_code)]
     pub fn with_associated_service(mut self, address: ServiceAddress) -> Self {
         self.associated_service = Some(address);
         self
