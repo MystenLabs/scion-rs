@@ -1,0 +1,33 @@
+name: Updates
+
+on:
+  # every Sunday
+  schedule:
+    - cron: '14 3 * * 0'
+  # on demand
+  workflow_dispatch:
+
+jobs:
+  pre-commit:
+    name: "Update pre-commit hooks and run them on all files"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - run: rustup update stable
+      - run: cargo install cargo-sort@1.0.9
+      - run: pip install pre-commit
+      - run: pre-commit autoupdate
+      - run: pre-commit run --all-files
+      - uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/update-pre-commit-hooks
+          title: "chore: update pre-commit hooks"
+          commit-message: "chore: update pre-commit hooks"
+          body: Update pre-commit hooks to latest version.
