@@ -26,6 +26,7 @@ pub enum DecodeError {
 }
 
 /// Partial or fully decoded commonHeader
+#[allow(dead_code)]
 pub(super) enum DecodedHeader {
     Partial(PartialHeader),
     Full(CommonHeader),
@@ -76,6 +77,7 @@ impl PartialHeader {
     }
 
     /// Number of bytes required to finish decoding the full common header.
+    #[allow(dead_code)]
     pub fn required_bytes(&self) -> usize {
         encoded_address_and_port_length(self.host_type)
     }
@@ -85,6 +87,7 @@ impl PartialHeader {
     /// # Panics
     ///
     /// Panics if there is not at least self.required_bytes() available in the buffer.
+    #[allow(dead_code)]
     pub fn finish_decoding(self, buffer: &mut impl Buf) -> CommonHeader {
         assert!(
             buffer.remaining() >= self.required_bytes(),
@@ -188,6 +191,7 @@ impl CommonHeader {
     ///
     /// Panics if there is not at least [`CommonHeader::MIN_LENGTH`] bytes available
     /// in the buffer.
+    #[allow(dead_code)]
     pub fn partial_decode(buffer: &mut impl Buf) -> Result<DecodedHeader, DecodeError> {
         assert!(
             buffer.remaining() >= CommonHeader::MIN_LENGTH,
@@ -210,6 +214,7 @@ impl CommonHeader {
     /// Panics if there is insufficient data in the buffer to decode the entire header.
     /// To avoid the panic, ensure there is [`Self::MAX_LENGTH`] bytes available, or
     /// use [`Self::partial_decode()`] instead.
+    #[allow(dead_code)]
     pub fn decode(buffer: &mut impl Buf) -> Result<Self, DecodeError> {
         PartialHeader::decode(buffer).map(|header| header.finish_decoding(buffer))
     }

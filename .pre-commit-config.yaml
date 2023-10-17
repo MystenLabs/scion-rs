@@ -45,10 +45,17 @@ repos:
     language: rust
     types: [rust]
     pass_filenames: false
+  - id: clippy-with-tests
+    name: clippy-with-tests
+    entry: cargo clippy
+    args: ["--all-features", "--tests", "--", "-D", "warnings"]
+    language: rust
+    types: [rust]
+    pass_filenames: false
   - id: clippy
     name: clippy
     entry: cargo clippy
-    args: ["--all-features", "--tests", "--", "-D", "warnings"]
+    args: ["--all-features", "--", "-D", "warnings"]
     language: rust
     types: [rust]
     pass_filenames: false
