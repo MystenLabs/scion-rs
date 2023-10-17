@@ -23,12 +23,12 @@ repos:
     - "--"
     - "--config"
     - "group_imports=StdExternalCrate,imports_granularity=Crate,imports_layout=HorizontalVertical"
-    language: system
+    language: rust
     types: [rust]
     pass_filenames: false
   - id: cargo-sort
     name: cargo-sort
-    entry: cargo sort
+    entry: cargo-sort
     args: ["-w"]
     language: rust
     types: [rust]
@@ -36,33 +36,33 @@ repos:
   - id: cargo-check
     name: cargo-check
     entry: cargo check
-    language: system
+    language: rust
     types: [rust]
     pass_filenames: false
   - id: cargo-test
     name: cargo-test
     entry: cargo test
-    language: system
+    language: rust
     types: [rust]
     pass_filenames: false
   - id: clippy-with-tests
     name: clippy-with-tests
     entry: cargo clippy
     args: ["--all-features", "--tests", "--", "-D", "warnings"]
-    language: system
+    language: rust
     types: [rust]
     pass_filenames: false
   - id: clippy
     name: clippy
     entry: cargo clippy
     args: ["--all-features", "--", "-D", "warnings"]
-    language: system
+    language: rust
     types: [rust]
     pass_filenames: false
   - id: deny
     name: cargo-deny
     entry: cargo deny
     args: ["--all-features", "check"]
-    language: system
+    language: rust
     types: [rust]
     pass_filenames: false
