@@ -10,7 +10,8 @@ use super::{AddressParseError, Asn, Isd};
 /// The combined ISD and AS identifier of a SCION AS (sometimes abbreviated as IA).
 #[derive(Copy, Clone, Eq, PartialEq, Deserialize, Hash)]
 #[serde(try_from = "String")]
-pub struct IsdAsn(u64);
+#[repr(transparent)]
+pub struct IsdAsn(pub u64);
 
 impl IsdAsn {
     /// A SCION IA of the special wildcard IA, 0-0.

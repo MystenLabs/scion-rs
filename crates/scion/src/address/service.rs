@@ -5,7 +5,7 @@ use std::{
 
 use thiserror;
 
-use super::{HostAddress, HostType};
+use super::{Host, HostAddress, HostType};
 
 /// A SCION service address.
 ///
@@ -18,7 +18,7 @@ use super::{HostAddress, HostType};
 /// both represent the anycast service address ServiceAddress::CONTROL. The
 /// corresponding multicast service address would be CS_M.
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-pub struct ServiceAddress(u16);
+pub struct ServiceAddress(pub u16);
 
 impl ServiceAddress {
     /// SCION daemon anycast service address (DS_A)
@@ -109,6 +109,12 @@ impl FromStr for ServiceAddress {
 impl From<ServiceAddress> for u16 {
     fn from(value: ServiceAddress) -> Self {
         value.0
+    }
+}
+
+impl From<ServiceAddress> for Host {
+    fn from(value: ServiceAddress) -> Self {
+        Host::Svc(value)
     }
 }
 
