@@ -99,7 +99,7 @@ impl ReliableRelayProtocol {
             State::Registered { transmit_queue, .. } if !transmit_queue.is_empty() => {
                 // The value 2 * MAX_TRANSMIT_BURST must be at most isize, which is the limit for
                 // number of Vec elements.
-                assert!(Self::MAX_TRANSMIT_BURST <= (isize::MAX >> 1) as usize);
+                debug_assert!(Self::MAX_TRANSMIT_BURST <= (isize::MAX >> 1) as usize);
 
                 let transmit_burst = min(transmit_queue.len(), Self::MAX_TRANSMIT_BURST);
                 let buffer_length = transmit_queue
