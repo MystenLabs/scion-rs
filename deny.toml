@@ -62,7 +62,7 @@ skip = [
     # h2 + tower use an old version
     { name = "indexmap", version = "=1.9.3" },
     # hyper uses an old version
-    { name = "socket2", version = "=0.4.9" },
+    { name = "socket2", version = "=0.4.10" },
     # axum + redox_syscall use an old version
     { name = "bitflags", version = "=1.3.2" },
 ]
