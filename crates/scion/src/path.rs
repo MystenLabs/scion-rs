@@ -11,17 +11,14 @@ pub enum PathErrorKind {
 }
 
 impl Display for PathErrorKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            PathErrorKind::InvalidSegmentLengths => {
-                f.write_str("the sequence of segment lengths are invalid")
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let description = match self {
+            PathErrorKind::InvalidSegmentLengths => "the sequence of segment lengths are invalid",
+            PathErrorKind::InfoFieldOutOfRange => "the current info field index is too large",
+            PathErrorKind::HopFieldOutOfRange => {
+                "the current hop field index is outside the range of the current info field"
             }
-            PathErrorKind::InfoFieldOutOfRange => {
-                f.write_str("the current info field index is too large")
-            }
-            PathErrorKind::HopFieldOutOfRange => f.write_str(
-                "the current hop field index is outside the range of the current info field",
-            ),
-        }
+        };
+        fmt.write_str(description)
     }
 }

@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use super::AddressParseError;
+use super::{error::AddressKind, AddressParseError};
 
 /// Identifier of a SCION Isolation Domain
 ///
@@ -55,11 +55,9 @@ impl FromStr for Isd {
     ///
     /// ISD 0 is parsed without any errors.
     fn from_str(string: &str) -> Result<Self, Self::Err> {
-        if let Ok(value) = u16::from_str(string) {
-            Ok(Isd::new(value))
-        } else {
-            Err(Self::Err::InvalidIsdString(string.into()))
-        }
+        u16::from_str(string)
+            .map(Isd::new)
+            .or(Err(AddressKind::Isd.into()))
     }
 }
 

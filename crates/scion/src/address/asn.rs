@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use super::AddressParseError;
+use super::{error::AddressKind, AddressParseError};
 
 /// A SCION autonomous system (AS) number
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -77,7 +77,7 @@ impl TryFrom<u64> for Asn {
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         if value > Asn::MAX_VALUE {
-            Err(AddressParseError::AsnOutOfRange)
+            Err(AddressKind::Asn.into())
         } else {
             Ok(Asn(value))
         }
@@ -93,34 +93,29 @@ impl FromStr for Asn {
             return if bgp_asn <= u16::MAX.into() {
                 Ok(Self(bgp_asn))
             } else {
-                Err(Self::Err::InvalidAsnString(asn_string.into()))
+                Err(AddressKind::Asn.into())
             };
         }
 
-        let mut result = 0u64;
-        let mut n_parts = 0;
+        let max_splits = usize::try_from(Asn::NUMBER_PARTS).expect("few parts");
+        let result = asn_string.splitn(max_splits, ':').try_fold(
+            (0u64, 0u32),
+            |(asn_value, n_parts), asn_part| {
+                u16::from_str_radix(asn_part, 16).map(|value| {
+                    (
+                        (asn_value << Asn::BITS_PER_PART) | u64::from(value),
+                        n_parts + 1,
+                    )
+                })
+            },
+        );
 
-        for asn_part in asn_string.split(':') {
-            n_parts += 1;
-            if n_parts > Asn::NUMBER_PARTS {
-                return Err(AddressParseError::InvalidAsnString(asn_string.into()));
-            }
-
-            match u16::from_str_radix(asn_part, 16) {
-                Ok(value) => {
-                    result <<= Asn::BITS_PER_PART;
-                    result |= u64::from(value);
-                }
-                Err(_) => return Err(AddressParseError::InvalidAsnPart(asn_string.into())),
-            }
+        if let Ok((value, Asn::NUMBER_PARTS)) = result {
+            // Can not panic as the result is at most 48 bits (exactly 3 parts, 16 bits each)
+            Ok(Asn::new(value))
+        } else {
+            Err(AddressKind::Asn.into())
         }
-
-        if n_parts != Asn::NUMBER_PARTS {
-            return Err(AddressParseError::InvalidAsnString(asn_string.into()));
-        }
-
-        // Can not panic as the result is at most 48 bits (exactly 3 parts, 16 bits each)
-        Ok(Asn::new(result))
     }
 }
 
@@ -148,7 +143,7 @@ mod tests {
         fn out_of_range() {
             assert_eq!(
                 Asn::try_from(Asn::MAX_VALUE + 1).unwrap_err(),
-                AddressParseError::AsnOutOfRange
+                AddressParseError(AddressKind::Asn)
             );
         }
     }
@@ -173,54 +168,25 @@ mod tests {
         test_success!(bgp_asn, "65535", Asn(65535));
 
         macro_rules! test_error {
-            ($name:ident, $input:expr, $expected:expr) => {
+            ($name:ident, $input:expr) => {
                 #[test]
                 fn $name() {
-                    assert_eq!(Asn::from_str($input).unwrap_err(), $expected);
+                    assert_eq!(
+                        Asn::from_str($input).unwrap_err(),
+                        AddressParseError(AddressKind::Asn)
+                    );
                 }
             };
         }
 
-        test_error!(
-            errs_large_decimal_format,
-            "65536",
-            AddressParseError::InvalidAsnString("65536".into())
-        );
-        test_error!(
-            errs_on_only_colon,
-            ":",
-            AddressParseError::InvalidAsnPart(":".into())
-        );
-        test_error!(
-            errs_extra_colon,
-            "0:0:0:",
-            AddressParseError::InvalidAsnString("0:0:0:".into())
-        );
-        test_error!(
-            errs_too_few,
-            "0:0",
-            AddressParseError::InvalidAsnString("0:0".into())
-        );
-        test_error!(
-            errs_invalid_part,
-            ":0:0",
-            AddressParseError::InvalidAsnPart(":0:0".into())
-        );
-        test_error!(
-            errs_out_of_range,
-            "10000:0:0",
-            AddressParseError::InvalidAsnPart("10000:0:0".into())
-        );
-        test_error!(
-            errs_out_of_range2,
-            "0:0:10000",
-            AddressParseError::InvalidAsnPart("0:0:10000".into())
-        );
-        test_error!(
-            errs_invalid_format,
-            "0:0x0:0",
-            AddressParseError::InvalidAsnPart("0:0x0:0".into())
-        );
+        test_error!(errs_large_decimal_format, "65536");
+        test_error!(errs_on_only_colon, ":");
+        test_error!(errs_extra_colon, "0:0:0:");
+        test_error!(errs_too_few, "0:0");
+        test_error!(errs_invalid_part, ":0:0");
+        test_error!(errs_out_of_range, "10000:0:0");
+        test_error!(errs_out_of_range2, "0:0:10000");
+        test_error!(errs_invalid_format, "0:0x0:0");
     }
 
     mod display {
