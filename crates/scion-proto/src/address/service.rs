@@ -45,7 +45,7 @@ impl ServiceAddress {
     /// # Examples
     ///
     /// ```
-    /// # use scion::address::ServiceAddress;
+    /// # use scion_proto::address::ServiceAddress;
     /// assert!(!ServiceAddress::DAEMON.is_multicast());
     /// assert!(ServiceAddress::DAEMON.multicast().is_multicast());
     /// ```
@@ -58,7 +58,7 @@ impl ServiceAddress {
     /// # Examples
     ///
     /// ```
-    /// # use scion::address::ServiceAddress;
+    /// # use scion_proto::address::ServiceAddress;
     /// assert!(ServiceAddress::DAEMON.multicast().anycast().is_anycast());
     /// assert!(!ServiceAddress::DAEMON.multicast().anycast().is_multicast());
     /// ```
@@ -71,7 +71,7 @@ impl ServiceAddress {
     /// # Examples
     ///
     /// ```
-    /// # use scion::address::ServiceAddress;
+    /// # use scion_proto::address::ServiceAddress;
     /// assert!(ServiceAddress::DAEMON.is_anycast());
     /// assert!(!ServiceAddress::DAEMON.multicast().is_anycast());
     /// ```

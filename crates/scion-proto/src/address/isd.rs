@@ -33,7 +33,7 @@ impl Isd {
     /// # Examples
     ///
     /// ```
-    /// # use scion::address::Isd;
+    /// # use scion_proto::address::Isd;
     /// assert!(Isd::WILDCARD.is_wildcard());
     /// assert!(!Isd::new(1).is_wildcard());
     /// ```

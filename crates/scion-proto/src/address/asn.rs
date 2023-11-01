@@ -38,7 +38,7 @@ impl Asn {
     /// # Examples
     ///
     /// ```
-    /// # use scion::address::Asn;
+    /// # use scion_proto::address::Asn;
     /// assert!(Asn::WILDCARD.is_wildcard());
     /// assert!(!Asn::new(1).is_wildcard());
     /// ```
