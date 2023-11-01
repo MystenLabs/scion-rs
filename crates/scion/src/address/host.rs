@@ -1,9 +1,9 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use super::ServiceAddress;
 
 /// The AS-local host identifier of a SCION address.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Host {
     /// An IPv4 or IPv6 host address
     Ip(IpAddr),
@@ -90,5 +90,23 @@ where
         self.as_ref()
             .map(HostAddress::host_address_type)
             .unwrap_or(HostType::None)
+    }
+}
+
+impl From<IpAddr> for Host {
+    fn from(value: IpAddr) -> Self {
+        Host::Ip(value)
+    }
+}
+
+impl From<Ipv4Addr> for Host {
+    fn from(value: Ipv4Addr) -> Self {
+        Host::Ip(value.into())
+    }
+}
+
+impl From<Ipv6Addr> for Host {
+    fn from(value: Ipv6Addr) -> Self {
+        Host::Ip(value.into())
     }
 }
