@@ -37,7 +37,7 @@ impl IsdAsn {
     /// # Examples
     ///
     /// ```
-    /// # use scion::address::{Asn,IsdAsn,Isd};
+    /// # use scion_proto::address::{Asn,IsdAsn,Isd};
     /// assert!(IsdAsn::new(Isd::WILDCARD,Asn::new(1)).is_wildcard());
     /// assert!(IsdAsn::new(Isd::new(1),Asn::WILDCARD).is_wildcard());
     /// assert!(!IsdAsn::new(Isd::new(1),Asn::new(1)).is_wildcard());

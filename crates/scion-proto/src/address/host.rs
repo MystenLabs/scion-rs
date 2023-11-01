@@ -27,7 +27,7 @@ impl HostType {
     /// # Examples
     ///
     /// ```
-    /// # use scion::address::HostType;
+    /// # use scion_proto::address::HostType;
     /// assert_eq!(HostType::from_byte(0), Some(HostType::None));
     /// assert_eq!(HostType::from_byte(1), Some(HostType::Ipv4));
     /// assert_eq!(HostType::from_byte(2), Some(HostType::Ipv6));
