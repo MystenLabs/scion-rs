@@ -3,9 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use thiserror;
-
-use super::{Host, HostAddress, HostType};
+use super::{error::AddressKind, AddressParseError, Host, HostAddress, HostType};
 
 /// A SCION service address.
 ///
@@ -17,7 +15,7 @@ use super::{Host, HostAddress, HostType};
 /// Service addresses can also be represented as strings, for example CS and CS_A
 /// both represent the anycast service address ServiceAddress::CONTROL. The
 /// corresponding multicast service address would be CS_M.
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, PartialOrd, Ord, Hash)]
 pub struct ServiceAddress(pub u16);
 
 impl ServiceAddress {
@@ -82,12 +80,8 @@ impl ServiceAddress {
     }
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, thiserror::Error)]
-#[error("invalid service address string: {0}")]
-pub struct ParseServiceAddressError(String);
-
 impl FromStr for ServiceAddress {
-    type Err = ParseServiceAddressError;
+    type Err = AddressParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (service, suffix) = s.split_once('_').unwrap_or((s, "A"));
@@ -96,12 +90,12 @@ impl FromStr for ServiceAddress {
             "CS" => ServiceAddress::CONTROL,
             "DS" => ServiceAddress::DAEMON,
             "Wildcard" => ServiceAddress::WILDCARD,
-            _ => return Err(ParseServiceAddressError(s.into())),
+            _ => return Err(AddressKind::Service.into()),
         };
         match suffix {
             "A" => Ok(address),
             "M" => Ok(address.multicast()),
-            _ => Err(ParseServiceAddressError(s.into())),
+            _ => Err(AddressKind::Service.into()),
         }
     }
 }
@@ -187,7 +181,7 @@ mod tests {
                 fn $name() {
                     assert_eq!(
                         ServiceAddress::from_str($str).unwrap_err(),
-                        ParseServiceAddressError($str.into())
+                        AddressParseError(AddressKind::Service)
                     );
                 }
             };

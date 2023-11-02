@@ -5,10 +5,10 @@ use std::{
 
 use serde::Deserialize;
 
-use super::{AddressParseError, Asn, Isd};
+use super::{error::AddressKind, AddressParseError, Asn, Isd};
 
 /// The combined ISD and AS identifier of a SCION AS (sometimes abbreviated as IA).
-#[derive(Copy, Clone, Eq, PartialEq, Deserialize, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Deserialize, Hash, PartialOrd, Ord)]
 #[serde(try_from = "String")]
 #[repr(transparent)]
 pub struct IsdAsn(pub u64);
@@ -73,16 +73,18 @@ impl FromStr for IsdAsn {
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         let n_separators = string.chars().filter(|c| *c == '-').take(2).count();
         if n_separators != 1 {
-            return Err(Self::Err::InvalidIaString(string.into()));
+            return Err(AddressKind::IsdAsn.into());
         }
 
         let (isd_str, asn_str) = string
             .split_once('-')
             .expect("already checked that the string contains exactly one '-'");
-        Ok(IsdAsn::new(
-            Isd::from_str(isd_str)?,
-            Asn::from_str(asn_str)?,
-        ))
+
+        if let (Ok(isd), Ok(asn)) = (Isd::from_str(isd_str), Asn::from_str(asn_str)) {
+            Ok(IsdAsn::new(isd, asn))
+        } else {
+            Err(AddressKind::IsdAsn.into())
+        }
     }
 }
 
@@ -230,7 +232,7 @@ mod tests {
         fn invalid() {
             assert_eq!(
                 IsdAsn::from_str("a-0:0:1").unwrap_err(),
-                AddressParseError::InvalidIsdString("a".into())
+                AddressParseError(AddressKind::IsdAsn)
             );
         }
 
@@ -238,7 +240,7 @@ mod tests {
         fn invalid_parts() {
             assert_eq!(
                 IsdAsn::from_str("1-1-0:0:1").unwrap_err(),
-                AddressParseError::InvalidIaString("1-1-0:0:1".into())
+                AddressParseError(AddressKind::IsdAsn)
             );
         }
     }
