@@ -106,201 +106,109 @@ impl Display for SocketAddr {
     }
 }
 
-macro_rules! impl_socket_address {
-    () => {
-        /// Returns the ISD-AS number associated with this socket address.
-        pub const fn isd_asn(&self) -> IsdAsn {
-            self.isd_asn
+macro_rules! socket_address {
+    (
+        $(#[$outer:meta])*
+        pub struct $name:ident{$field:ident: $type:ty, kind: $kind:path, setter: $setter:ident};
+    ) => {
+        $(#[$outer])*
+        #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Hash)]
+        pub struct $name {
+            isd_asn: IsdAsn,
+            $field: $type,
+            port: u16,
         }
 
-        /// Returns the port number associated with this socket address.
-        pub const fn port(&self) -> u16 {
-            self.port
+        impl $name {
+            /// Creates a new SCION socket address from an [ISD-AS number][`IsdAsn`],
+            /// [address][`$type`], and port number.
+            pub const fn new(isd_asn: IsdAsn, $field: $type, port: u16) -> Self {
+                Self { isd_asn, $field, port }
+            }
+
+            /// Returns the address associated with this socket address.
+            pub const fn $field(&self) -> &$type {
+                &self.$field
+            }
+
+            /// Changes the address associated with this socket address.
+            pub fn $setter(&mut self, $field: $type) {
+                self.$field = $field;
+            }
+
+            /// Returns the ISD-AS number associated with this socket address.
+            pub const fn isd_asn(&self) -> IsdAsn {
+                self.isd_asn
+            }
+
+            /// Returns the port number associated with this socket address.
+            pub const fn port(&self) -> u16 {
+                self.port
+            }
+
+            /// Changes the ISD-AS number associated with this socket address.
+            pub fn set_isd_asn(&mut self, new_isd_asn: IsdAsn) {
+                self.isd_asn = new_isd_asn;
+            }
+
+            /// Changes the port associated with this socket address.
+            pub fn set_port(&mut self, new_port: u16) {
+                self.port = new_port;
+            }
         }
 
-        /// Changes the ISD-AS number associated with this socket address.
-        pub fn set_isd_asn(&mut self, new_isd_asn: IsdAsn) {
-            self.isd_asn = new_isd_asn;
+        impl Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "[{},{}]:{}", self.isd_asn(), self.$field(), self.port())
+            }
         }
 
-        /// Changes the port associated with this socket address.
-        pub fn set_port(&mut self, new_port: u16) {
-            self.port = new_port;
+        impl FromStr for $name {
+            type Err = AddressParseError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                if let Some((isd_asn, host, port)) = parse_ia_and_port(s) {
+                    let $field = host
+                        .parse()
+                        .or(Err(AddressParseError($kind)))?;
+
+                    Ok(Self { isd_asn, port, $field })
+                } else {
+                    Err($kind.into())
+                }
+            }
         }
     };
 }
 
-/// A SCION IPv4 socket address.
-///
-/// SCION IPv4 socket addresses consist of a SCION ISD-AS number, an IPv4 address,
-/// and a 16-bit port number.
-///
-/// See [`SocketAddr`] for a type encompassing IPv4, IPv6, and Service socket addresses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SocketAddrV4 {
-    isd_asn: IsdAsn,
-    ip: Ipv4Addr,
-    port: u16,
+socket_address! {
+    /// A SCION IPv4 socket address.
+    ///
+    /// SCION IPv4 socket addresses consist of a SCION ISD-AS number, an IPv4 address,
+    /// and a 16-bit port number.
+    ///
+    /// See [`SocketAddr`] for a type encompassing IPv4, IPv6, and Service socket addresses.
+    pub struct SocketAddrV4 {ip: Ipv4Addr, kind: AddressKind::SocketV4, setter: set_ip};
 }
 
-impl SocketAddrV4 {
-    /// Creates a new SCION socket address from an [ISD-AS number][`IsdAsn`],
-    /// [IPv4 address][`Ipv4Addr`], and port number.
-    pub const fn new(isd_asn: IsdAsn, ip: Ipv4Addr, port: u16) -> Self {
-        Self { isd_asn, ip, port }
-    }
-
-    /// Returns the IP address associated with this socket address.
-    pub const fn ip(&self) -> &Ipv4Addr {
-        &self.ip
-    }
-
-    /// Changes the IP address associated with this socket address.
-    pub fn set_ip(&mut self, new_ip: Ipv4Addr) {
-        self.ip = new_ip;
-    }
-
-    impl_socket_address!();
+socket_address! {
+    /// A SCION IPv6 socket address.
+    ///
+    /// SCION IPv6 socket addresses consist of a SCION ISD-AS number, an IPv6 address,
+    /// and a 16-bit port number.
+    ///
+    /// See [`SocketAddr`] for a type encompassing IPv6, IPv6, and Service socket addresses.
+    pub struct SocketAddrV6 {ip: Ipv6Addr, kind: AddressKind::SocketV6, setter: set_ip};
 }
 
-impl Display for SocketAddrV4 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{},{}]:{}", self.isd_asn(), self.ip(), self.port())
-    }
-}
-
-impl FromStr for SocketAddrV4 {
-    type Err = AddressParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some((isd_asn, host, port)) = parse_ia_and_port(s) {
-            let ip = host
-                .parse()
-                .or(Err(AddressParseError(AddressKind::SocketV4)))?;
-
-            Ok(Self { isd_asn, port, ip })
-        } else {
-            Err(AddressKind::SocketV4.into())
-        }
-    }
-}
-
-/// A SCION IPv6 socket address.
-///
-/// SCION IPv6 socket addresses consist of a SCION ISD-AS number, an IPv6 address,
-/// and a 16-bit port number.
-///
-/// See [`SocketAddr`] for a type encompassing IPv6, IPv6, and Service socket addresses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SocketAddrV6 {
-    isd_asn: IsdAsn,
-    ip: Ipv6Addr,
-    port: u16,
-}
-
-impl SocketAddrV6 {
-    /// Creates a new SCION socket address from an [ISD-AS number][`IsdAsn`],
-    /// [IPv6 address][`Ipv6Addr`], and port number.
-    pub const fn new(isd_asn: IsdAsn, ip: Ipv6Addr, port: u16) -> Self {
-        Self { isd_asn, ip, port }
-    }
-
-    /// Returns the IP address associated with this socket address.
-    pub const fn ip(&self) -> &Ipv6Addr {
-        &self.ip
-    }
-
-    /// Changes the IP address associated with this socket address.
-    pub fn set_ip(&mut self, new_ip: Ipv6Addr) {
-        self.ip = new_ip;
-    }
-
-    impl_socket_address!();
-}
-
-impl Display for SocketAddrV6 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{},{}]:{}", self.isd_asn(), self.ip(), self.port())
-    }
-}
-
-impl FromStr for SocketAddrV6 {
-    type Err = AddressParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some((isd_asn, host, port)) = parse_ia_and_port(s) {
-            let ip = host
-                .parse()
-                .or(Err(AddressParseError(AddressKind::SocketV6)))?;
-
-            Ok(Self { isd_asn, port, ip })
-        } else {
-            Err(AddressKind::SocketV6.into())
-        }
-    }
-}
-
-/// A SCION service socket address.
-///
-/// SCION service socket addresses consist of a SCION ISD-AS number, an SCION service address
-/// and a 16-bit port number.
-///
-/// See [`SocketAddr`] for a type encompassing IPv6, IPv6, and Service socket addresses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SocketAddrSvc {
-    isd_asn: IsdAsn,
-    service: ServiceAddress,
-    port: u16,
-}
-
-impl SocketAddrSvc {
-    /// Creates a new SCION socket address from an [ISD-AS number][`IsdAsn`],
-    /// [service address][`ServiceAddress`], and port number.
-    pub const fn new(isd_asn: IsdAsn, service: ServiceAddress, port: u16) -> Self {
-        Self {
-            isd_asn,
-            service,
-            port,
-        }
-    }
-
-    /// Returns the service address associated with this socket address.
-    pub const fn service(&self) -> &ServiceAddress {
-        &self.service
-    }
-
-    /// Changes the service address associated with this socket address.
-    pub fn set_service(&mut self, new_service: ServiceAddress) {
-        self.service = new_service;
-    }
-
-    impl_socket_address!();
-}
-
-impl Display for SocketAddrSvc {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{},{}]:{}", self.isd_asn(), self.service(), self.port())
-    }
-}
-
-impl FromStr for SocketAddrSvc {
-    type Err = AddressParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some((isd_asn, host, port)) = parse_ia_and_port(s) {
-            let service = host
-                .parse()
-                .or(Err(AddressParseError(AddressKind::SocketSvc)))?;
-
-            Ok(Self {
-                isd_asn,
-                port,
-                service,
-            })
-        } else {
-            Err(AddressKind::SocketSvc.into())
-        }
-    }
+socket_address! {
+    /// A SCION service socket address.
+    ///
+    /// SCION service socket addresses consist of a SCION ISD-AS number, an SCION service address
+    /// and a 16-bit port number.
+    ///
+    /// See [`SocketAddr`] for a type encompassing IPv6, IPv6, and Service socket addresses.
+    pub struct SocketAddrSvc {service: ServiceAddress, kind: AddressKind::SocketSvc, setter: set_service};
 }
 
 fn parse_ia_and_port(s: &str) -> Option<(IsdAsn, &str, u16)> {
