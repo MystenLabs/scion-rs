@@ -1,16 +1,16 @@
 name: Updates
 
 on:
-  # every Sunday
+  # every month
   schedule:
-    - cron: '14 3 * * 0'
+    - cron: '14 3 1 * *'
   # on demand
   workflow_dispatch:
 
 jobs:
   pre-commit:
     name: "Update pre-commit hooks and run them on all files"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-ghcloud
     permissions:
       contents: write
       pull-requests: write
@@ -20,7 +20,9 @@ jobs:
         with:
           python-version: '3.12'
       - run: rustup update stable
+      - run: sudo apt-get install protobuf-compiler
       - run: cargo install cargo-sort@1.0.9
+      - run: cargo install --locked cargo-deny@0.14.3
       - run: pip install pre-commit
       - run: pre-commit autoupdate
       - run: pre-commit run --all-files
