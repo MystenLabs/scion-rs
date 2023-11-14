@@ -1,16 +1,16 @@
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v2.3.0
+  rev: v4.5.0
   hooks:
   - id: check-yaml
   - id: trailing-whitespace
 - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
-  rev: "2.7.1"
+  rev: "2.7.3"
   hooks:
   - id: editorconfig-checker
     alias: ec
 - repo: https://github.com/crate-ci/typos
-  rev: v1.16.17
+  rev: v1.16.23
   hooks:
   - id: typos
     pass_filenames: false
