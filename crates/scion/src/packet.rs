@@ -24,8 +24,8 @@ pub use path_header::PathHeader;
 /// Instances of an object associated with both a source and destination endpoint.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ByEndpoint<T> {
-    destination: T,
-    source: T,
+    pub destination: T,
+    pub source: T,
 }
 
 /// A SCION network packet.

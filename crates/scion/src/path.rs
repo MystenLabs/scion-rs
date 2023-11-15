@@ -2,6 +2,16 @@ use std::fmt::Display;
 
 pub mod standard;
 
+// Question(mlegner): Should these modules be a submodule of `daemon` instead? Or even add a dataplane/controlplane
+// hierarchy somewhere?
+pub mod cp_path;
+
+pub mod epic;
+pub use epic::EpicAuths;
+
+pub mod linktype;
+pub use linktype::LinkType;
+
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq)]
 pub enum PathErrorKind {

@@ -102,10 +102,10 @@ jobs:
         with:
           save-if: "false"
       - run: sudo apt-get install protobuf-compiler
-      - run: cargo install cargo-tarpaulin@0.26.1
+      - run: cargo install cargo-tarpaulin@0.27.1
 
       - name: Run tests and record coverage
-        run: cargo tarpaulin --workspace --skip-clean --all-targets --doc --out html --out xml
+        run: cargo tarpaulin --workspace --skip-clean --all-targets --doc --out html --out xml --exclude-files "crates/scion-grpc/*"
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v3
