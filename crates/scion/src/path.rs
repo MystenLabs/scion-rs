@@ -2,8 +2,11 @@ use std::fmt::Display;
 
 pub mod standard;
 
+pub mod error;
+pub use error::{PathParseError, PathParseErrorKind};
+
 mod cp_path;
-pub use cp_path::{GeoCoordinates, Path, PathMetadata, PathParseError};
+pub use cp_path::{GeoCoordinates, Path, PathMetadata};
 
 pub mod epic;
 pub use epic::EpicAuths;

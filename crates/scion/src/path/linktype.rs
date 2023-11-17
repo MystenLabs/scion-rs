@@ -1,4 +1,4 @@
-use super::cp_path::PathParseError;
+use super::{PathParseError, PathParseErrorKind};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
 pub enum LinkType {
@@ -20,7 +20,7 @@ impl TryFrom<i32> for LinkType {
             2 => Ok(Self::Parent),
             3 => Ok(Self::Child),
             4 => Ok(Self::Peer),
-            _ => Err(PathParseError::InvalidLinkType),
+            _ => Err(PathParseErrorKind::InvalidLinkType.into()),
         }
     }
 }

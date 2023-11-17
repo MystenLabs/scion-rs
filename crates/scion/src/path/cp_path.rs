@@ -5,30 +5,8 @@ use chrono::{DateTime, Duration, Utc};
 use scion_grpc::daemon::v1 as daemon_grpc;
 use tracing::{span, warn, Level};
 
-use super::{EpicAuths, LinkType};
-use crate::{address::IsdAsn, packet::ByEndpoint};
-
-#[derive(Eq, PartialEq, Clone, Debug, thiserror::Error)]
-pub enum PathParseError {
-    #[error("Empty raw path")]
-    EmptyRaw,
-    #[error("No underlay address for local border router")]
-    NoInterface,
-    #[error("Invalid underlay address for local border router {0}")]
-    InvalidInterface(String),
-    #[error("Invalid interface {0} for on-path AS {1}")]
-    InvalidPathInterface(u64, IsdAsn),
-    #[error("Invalid expiration timestamp")]
-    InvalidExpiration,
-    #[error("Negative on-path latency")]
-    NegativeLatency,
-    #[error("Invalid on-path latency")]
-    InvalidLatency,
-    #[error("Invalid link type")]
-    InvalidLinkType,
-    #[error("Invalid MTU")]
-    InvalidMtu,
-}
+use super::{EpicAuths, LinkType, PathParseError};
+use crate::{address::IsdAsn, packet::ByEndpoint, path::error::PathParseErrorKind};
 
 /// A SCION end-to-end path with metadata
 #[derive(Debug, Clone, PartialEq)]
@@ -119,9 +97,9 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
                     t.seconds,
                     t.nanos
                         .try_into()
-                        .map_err(|_| PathParseError::InvalidExpiration)?,
+                        .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidExpiration))?,
                 )
-                .ok_or(PathParseError::InvalidExpiration)?,
+                .ok_or(PathParseError::from(PathParseErrorKind::InvalidExpiration))?,
             ),
             None => {
                 warn!("path without expiration");
@@ -131,7 +109,7 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
         let mtu = grpc_path
             .mtu
             .try_into()
-            .map_err(|_| PathParseError::InvalidMtu)?;
+            .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidMtu))?;
         let interfaces = grpc_path
             .interfaces
             .into_iter()
@@ -139,8 +117,9 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
                 let isd_asn = IsdAsn::from(i.isd_as);
                 Ok((
                     isd_asn,
-                    u16::try_from(i.id)
-                        .map_err(|_| PathParseError::InvalidPathInterface(i.id, isd_asn))?,
+                    u16::try_from(i.id).map_err(|_| {
+                        PathParseError::from(PathParseErrorKind::InvalidPathInterface)
+                    })?,
                 ))
             })
             .collect::<Result<Vec<_>, PathParseError>>()
@@ -156,14 +135,14 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
             .map(|mut d| {
                 d.normalize();
                 if d.seconds < 0 {
-                    Err(PathParseError::NegativeLatency)
+                    Err(PathParseErrorKind::NegativeLatency.into())
                 } else {
                     Duration::seconds(d.seconds)
                         .checked_add(&Duration::nanoseconds(d.nanos.into()))
-                        .ok_or(PathParseError::InvalidLatency)
+                        .ok_or(PathParseErrorKind::InvalidLatency.into())
                 }
             })
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<Vec<_>, PathParseError>>()
             .unwrap_or_else(|e| {
                 // We cannot simply skip the problematic entries as otherwise the order would be wrong;
                 // an alternative would be to use a map instead of a vector.
@@ -180,7 +159,7 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
             .link_type
             .into_iter()
             .map(LinkType::try_from)
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<Vec<_>, PathParseError>>()
             .unwrap_or_else(|e| {
                 // We cannot simply skip the problematic entries as otherwise the order would be wrong;
                 // an alternative would be to use a map instead of a vector.
@@ -213,15 +192,15 @@ impl Path {
     ) -> Result<Self, PathParseError> {
         let dataplane_path = Bytes::from(std::mem::take(&mut value.raw));
         if dataplane_path.is_empty() {
-            return Err(PathParseError::EmptyRaw);
+            return Err(PathParseErrorKind::EmptyRaw.into());
         };
         let underlay_next_hop = match &value.interface {
             Some(daemon_grpc::Interface {
                 address: Some(daemon_grpc::Underlay { address }),
             }) => address
                 .parse()
-                .map_err(|_| PathParseError::InvalidInterface(address.clone()))?,
-            _ => return Err(PathParseError::NoInterface),
+                .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidInterface))?,
+            _ => return Err(PathParseErrorKind::NoInterface.into()),
         };
         let metadata = Some(PathMetadata::try_from(value)?);
 
@@ -309,14 +288,14 @@ mod tests {
         };
     }
 
-    test_conversion_failure!(empty_raw_path, p, {}, PathParseError::EmptyRaw);
+    test_conversion_failure!(empty_raw_path, p, {}, PathParseErrorKind::EmptyRaw.into());
     test_conversion_failure!(
         no_interface,
         p,
         {
             p.raw = vec![0];
         },
-        PathParseError::NoInterface
+        PathParseErrorKind::NoInterface.into()
     );
     test_conversion_failure!(
         invalid_interface,
@@ -329,6 +308,6 @@ mod tests {
                 }),
             });
         },
-        PathParseError::InvalidInterface("invalid address".into())
+        PathParseErrorKind::InvalidInterface.into()
     );
 }
