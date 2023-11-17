@@ -1,6 +1,32 @@
 use std::fmt::Display;
 
-/// An error which can be returned when parsing a SCION path.
+#[non_exhaustive]
+#[derive(Debug, PartialEq, Eq)]
+/// Error kinds for dataplane paths.
+pub enum DataplanePathErrorKind {
+    InvalidSegmentLengths,
+    InfoFieldOutOfRange,
+    HopFieldOutOfRange,
+}
+
+impl Display for DataplanePathErrorKind {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let description = match self {
+            DataplanePathErrorKind::InvalidSegmentLengths => {
+                "the sequence of segment lengths are invalid"
+            }
+            DataplanePathErrorKind::InfoFieldOutOfRange => {
+                "the current info field index is too large"
+            }
+            DataplanePathErrorKind::HopFieldOutOfRange => {
+                "the current hop field index is outside the range of the current info field"
+            }
+        };
+        fmt.write_str(description)
+    }
+}
+
+/// An error which can be returned when parsing a SCION path with metadata.
 #[derive(Eq, PartialEq, Clone, Debug, thiserror::Error)]
 pub struct PathParseError(PathParseErrorKind);
 

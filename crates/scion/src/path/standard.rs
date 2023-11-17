@@ -2,7 +2,7 @@ use std::mem;
 
 use bytes::{Buf, Bytes};
 
-use super::PathErrorKind;
+use super::DataplanePathErrorKind;
 use crate::{
     packet::DecodeError,
     wire_encoding::{self, WireDecode, WireDecodeWithContext},
@@ -142,11 +142,11 @@ impl<T: Buf> WireDecode<T> for PathMetaHeader {
             || meta.segment_lengths[1].get() > 0 && meta.segment_lengths[0].get() == 0
             || meta.segment_lengths[0].get() == 0
         {
-            return Err(PathErrorKind::InvalidSegmentLengths.into());
+            return Err(DataplanePathErrorKind::InvalidSegmentLengths.into());
         }
 
         if meta.info_field_index() >= meta.info_fields_count() {
-            return Err(PathErrorKind::InfoFieldOutOfRange.into());
+            return Err(DataplanePathErrorKind::InfoFieldOutOfRange.into());
         }
         // Above errs also when info_fields_index() is 4, since info_fields_count() is at most 3
         debug_assert!(meta.info_field_index() <= 3);
@@ -154,7 +154,7 @@ impl<T: Buf> WireDecode<T> for PathMetaHeader {
         if meta.hop_field_index() >= meta.hop_fields_count()
             || meta.computed_info_field_index() != meta.info_field_index()
         {
-            return Err(PathErrorKind::HopFieldOutOfRange.into());
+            return Err(DataplanePathErrorKind::HopFieldOutOfRange.into());
         }
 
         Ok(meta)
@@ -306,46 +306,46 @@ mod tests {
     decode_errs!(
         invalid_segment_len,
         path_bytes! {info: 0, hop: 0, seg_lengths: [0, 1, 1]},
-        PathErrorKind::InvalidSegmentLengths
+        DataplanePathErrorKind::InvalidSegmentLengths
     );
     decode_errs!(
         invalid_segment_len2,
         path_bytes! {info: 0, hop: 0, seg_lengths: [1, 0, 1]},
-        PathErrorKind::InvalidSegmentLengths
+        DataplanePathErrorKind::InvalidSegmentLengths
     );
     decode_errs!(
         invalid_segment_len3,
         path_bytes! {info: 0, hop: 0, seg_lengths: [0, 1, 0]},
-        PathErrorKind::InvalidSegmentLengths
+        DataplanePathErrorKind::InvalidSegmentLengths
     );
     decode_errs!(
         no_segment_len,
         path_bytes! {info: 0, hop: 0, seg_lengths: [0, 0, 0]},
-        PathErrorKind::InvalidSegmentLengths
+        DataplanePathErrorKind::InvalidSegmentLengths
     );
     decode_errs!(
         info_index_too_large,
         path_bytes! {info: 3, hop: 0, seg_lengths: [5, 4, 3]},
-        PathErrorKind::InfoFieldOutOfRange
+        DataplanePathErrorKind::InfoFieldOutOfRange
     );
     decode_errs!(
         info_index_out_of_range,
         path_bytes! {info: 2, hop: 0, seg_lengths: [5, 4, 0]},
-        PathErrorKind::InfoFieldOutOfRange
+        DataplanePathErrorKind::InfoFieldOutOfRange
     );
     decode_errs!(
         hop_field_out_of_range,
         path_bytes! {info: 0, hop: 10, seg_lengths: [9, 0, 0]},
-        PathErrorKind::HopFieldOutOfRange
+        DataplanePathErrorKind::HopFieldOutOfRange
     );
     decode_errs!(
         hop_field_points_to_wrong_info,
         path_bytes! {info: 0, hop: 6, seg_lengths: [3, 7, 0]},
-        PathErrorKind::HopFieldOutOfRange
+        DataplanePathErrorKind::HopFieldOutOfRange
     );
     decode_errs!(
         hop_field_points_to_wrong_info2,
         path_bytes! {info: 0, hop: 3, seg_lengths: [3, 7, 0]},
-        PathErrorKind::HopFieldOutOfRange
+        DataplanePathErrorKind::HopFieldOutOfRange
     );
 }
