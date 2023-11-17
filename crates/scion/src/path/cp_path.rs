@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use bytes::Bytes;
 use chrono::{DateTime, Duration, Utc};
-use scion_grpc::daemon::v1::{self as daemon_grpc};
+use scion_grpc::daemon::v1 as daemon_grpc;
 use tracing::{span, warn, Level};
 
 use super::{EpicAuths, LinkType};
@@ -26,6 +26,8 @@ pub enum PathParseError {
     InvalidLatency,
     #[error("Invalid link type")]
     InvalidLinkType,
+    #[error("Invalid MTU")]
+    InvalidMtu,
 }
 
 /// A SCION end-to-end path with metadata
@@ -38,17 +40,16 @@ pub struct Path {
     /// The ISD-ASN where the path starts and ends
     pub isd_asn: ByEndpoint<IsdAsn>,
     /// Path metadata
-    metadata: PathMetadata,
+    metadata: Option<PathMetadata>,
 }
 
 /// Metadata of SCION end-to-end paths
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PathMetadata {
-    // Question(mlegner): Should the expiration be in the `Path` struct directly?
     /// The point in time when this path expires.
     expiration: Option<DateTime<Utc>>,
     /// The maximum transmission unit (MTU) on the path in bytes.
-    mtu: u32,
+    mtu: u16,
     /// The list of interfaces the path is composed of.
     interfaces: Vec<(IsdAsn, u16)>,
     /// Latencies between any two consecutive interfaces.
@@ -60,7 +61,7 @@ pub struct PathMetadata {
     /// Entry i describes the bandwidth between interfaces i and i+1.
     /// A 0-value indicates that the AS did not announce a bandwidth for this
     /// hop.
-    bandwidth: Vec<u64>,
+    bandwidth_kbps: Vec<u64>,
     /// Geographical position of the border routers along the path.
     /// Entry i describes the position of the router for interface i.
     /// A 0-value indicates that the AS did not announce a position for this
@@ -83,8 +84,7 @@ pub struct PathMetadata {
 }
 
 /// Geographic coordinates with latitude and longitude
-///
-/// Using a custom type to prevent importing a library here
+// Using a custom type to prevent importing a library here
 #[derive(PartialEq, Clone, Debug, Default)]
 pub struct GeoCoordinates {
     pub lat: f32,
@@ -128,7 +128,10 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
                 None
             }
         };
-        let mtu = grpc_path.mtu;
+        let mtu = grpc_path
+            .mtu
+            .try_into()
+            .map_err(|_| PathParseError::InvalidMtu)?;
         let interfaces = grpc_path
             .interfaces
             .into_iter()
@@ -193,7 +196,7 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
             mtu,
             interfaces,
             latency,
-            bandwidth,
+            bandwidth_kbps: bandwidth,
             geo,
             link_type,
             internal_hops,
@@ -204,16 +207,13 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
 }
 
 impl Path {
-    pub fn try_from_grpc_with_isd_asns(
+    pub fn try_from_grpc_with_endpoints(
         mut value: daemon_grpc::Path,
         isd_asn: ByEndpoint<IsdAsn>,
     ) -> Result<Self, PathParseError> {
-        let mut raw = vec![];
-        value.raw = std::mem::replace(&mut raw, value.raw);
-        let dataplane_path = if raw.is_empty() {
+        let dataplane_path = Bytes::from(std::mem::take(&mut value.raw));
+        if dataplane_path.is_empty() {
             return Err(PathParseError::EmptyRaw);
-        } else {
-            Bytes::from(raw)
         };
         let underlay_next_hop = match &value.interface {
             Some(daemon_grpc::Interface {
@@ -223,7 +223,7 @@ impl Path {
                 .map_err(|_| PathParseError::InvalidInterface(address.clone()))?,
             _ => return Err(PathParseError::NoInterface),
         };
-        let metadata = PathMetadata::try_from(value)?;
+        let metadata = Some(PathMetadata::try_from(value)?);
 
         Ok(Self {
             dataplane_path,
@@ -269,7 +269,7 @@ mod tests {
             }),
         });
         assert_eq!(
-            Path::try_from_grpc_with_isd_asns(
+            Path::try_from_grpc_with_endpoints(
                 p,
                 ByEndpoint {
                     source: IsdAsn::WILDCARD,
@@ -283,7 +283,7 @@ mod tests {
                     source: IsdAsn::WILDCARD,
                     destination: IsdAsn::WILDCARD,
                 },
-                metadata: PathMetadata::default(),
+                metadata: Some(PathMetadata::default()),
             })
         )
     }
@@ -296,7 +296,7 @@ mod tests {
                 let mut $path = empty_grpc_path();
                 $statements
                 assert_eq!(
-                    Path::try_from_grpc_with_isd_asns(
+                    Path::try_from_grpc_with_endpoints(
                         $path,
                         ByEndpoint {
                             source: IsdAsn::WILDCARD,
