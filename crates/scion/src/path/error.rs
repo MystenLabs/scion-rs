@@ -36,11 +36,8 @@ pub enum PathParseErrorKind {
     InvalidRaw,
     NoInterface,
     InvalidInterface,
-    InvalidPathInterface,
+    InvalidNumberOfInterfaces,
     InvalidExpiration,
-    NegativeLatency,
-    InvalidLatency,
-    InvalidLinkType,
     InvalidMtu,
 }
 
@@ -53,11 +50,10 @@ impl Display for PathParseError {
             PathParseErrorKind::InvalidInterface => {
                 "Invalid underlay address for local border router"
             }
-            PathParseErrorKind::InvalidPathInterface => "Invalid interface for on-path AS",
+            PathParseErrorKind::InvalidNumberOfInterfaces => {
+                "Path metadata contains zero or an odd number of interfaces"
+            }
             PathParseErrorKind::InvalidExpiration => "Invalid expiration timestamp",
-            PathParseErrorKind::NegativeLatency => "Negative on-path latency",
-            PathParseErrorKind::InvalidLatency => "Invalid on-path latency",
-            PathParseErrorKind::InvalidLinkType => "Invalid link type",
             PathParseErrorKind::InvalidMtu => "Invalid MTU",
         };
 

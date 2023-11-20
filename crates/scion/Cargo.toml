@@ -12,3 +12,6 @@ serde = { version = "1.0.188", features = ["derive"] }
 thiserror = "1.0.48"
 tonic = "0.10.2"
 tracing = "0.1.40"
+
+[dev-dependencies]
+prost-types = "0.12.2"

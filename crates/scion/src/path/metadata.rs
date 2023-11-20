@@ -22,43 +22,46 @@ pub struct Path {
 }
 
 /// Metadata of SCION end-to-end paths
+///
+/// Fields are set to `None` if unset or trying to convert an invalid value.
+/// For vectors, individual entries are `None` if trying to convert an invalid value.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PathMetadata {
     /// The point in time when this path expires.
-    expiration: Option<DateTime<Utc>>,
+    pub expiration: DateTime<Utc>,
     /// The maximum transmission unit (MTU) on the path in bytes.
-    mtu: u16,
+    pub mtu: u16,
     /// The list of interfaces the path is composed of.
-    interfaces: Vec<(IsdAsn, u16)>,
+    pub interfaces: Vec<Option<PathInterface>>,
     /// Latencies between any two consecutive interfaces.
     /// Entry i describes the latency between interface i and i+1.
     /// Consequently, there are N-1 entries for N interfaces.
     /// A 0-value indicates that the AS did not announce a latency for this hop.
-    latency: Vec<Duration>,
+    pub latency: Option<Vec<Option<Duration>>>,
     /// The bandwidth between any two consecutive interfaces, in kbps.
     /// Entry i describes the bandwidth between interfaces i and i+1.
     /// A 0-value indicates that the AS did not announce a bandwidth for this
     /// hop.
-    bandwidth_kbps: Vec<u64>,
+    pub bandwidth_kbps: Option<Vec<u64>>,
     /// Geographical position of the border routers along the path.
     /// Entry i describes the position of the router for interface i.
     /// A 0-value indicates that the AS did not announce a position for this
     /// router.
-    geo: Vec<GeoCoordinates>,
+    pub geo: Option<Vec<GeoCoordinates>>,
     /// LinkType contains the announced link type of inter-domain links.
     /// Entry i describes the link between interfaces 2*i and 2*i+1.
-    link_type: Vec<LinkType>,
+    pub link_type: Option<Vec<LinkType>>,
     /// Number of AS-internal hops for the ASes on path.
     /// Entry i describes the hop between interfaces 2*i+1 and 2*i+2 in the same
     /// AS.
     /// Consequently, there are no entries for the first and last ASes, as these
     /// are not traversed completely by the path.
-    internal_hops: Vec<u32>,
+    pub internal_hops: Option<Vec<u32>>,
     /// Notes added by ASes on the path, in the order of occurrence.
     /// Entry i is the note of AS i on the path.
-    notes: Vec<String>,
+    pub notes: Option<Vec<String>>,
     /// EpicAuths contains the EPIC authenticators used to calculate the PHVF and LHVF.
-    epic_auths: Option<EpicAuths>,
+    pub epic_auths: Option<EpicAuths>,
 }
 
 /// Geographic coordinates with latitude and longitude
@@ -68,6 +71,13 @@ pub struct GeoCoordinates {
     pub lat: f32,
     pub long: f32,
     pub address: String,
+}
+
+/// SCION interface with the AS's ISD-ASN and the interface's ID
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PathInterface {
+    pub isd_asn: IsdAsn,
+    pub id: u16,
 }
 
 impl From<daemon_grpc::GeoCoordinates> for GeoCoordinates {
@@ -80,6 +90,22 @@ impl From<daemon_grpc::GeoCoordinates> for GeoCoordinates {
     }
 }
 
+macro_rules! some_if_length_matches {
+    ($input_vec:expr, $expected_length:expr, $result:expr) => {
+        if $input_vec.len() == $expected_length {
+            Some($result)
+        } else {
+            None
+        }
+    };
+    (($input_vec:expr, $expected_length:expr) => $($method:ident ($($param:expr),*)).*) => {
+        some_if_length_matches!($input_vec, $expected_length, $input_vec.$($method ($($param),*)).*)
+    };
+    ($input_vec:expr, $expected_length:expr) => {
+        some_if_length_matches!($input_vec, $expected_length, $input_vec)
+    };
+}
+
 impl TryFrom<daemon_grpc::Path> for PathMetadata {
     type Error = PathParseError;
 
@@ -89,85 +115,82 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
             "trying to convert metadata from gRPC path to internal type"
         );
 
-        // TODO(mlegner): Check length of various entries.
+        // We check that the metadata is itself consistent, including the lengths of various metadata vectors.
+        // We *do not* check if it is consistent with the raw dataplane path.
+        let count_interfaces = grpc_path.interfaces.len();
+        if count_interfaces == 0 || count_interfaces % 2 != 0 {
+            return Err(PathParseErrorKind::InvalidNumberOfInterfaces.into());
+        }
+        let expected_count_ases = count_interfaces / 2 + 1;
+        let expected_count_links = count_interfaces - 1;
+        let expected_count_links_intra = count_interfaces / 2 - 1;
+        let expected_count_links_inter = count_interfaces / 2;
 
-        let expiration = match &grpc_path.expiration {
-            Some(t) => Some(
-                DateTime::<Utc>::from_timestamp(
-                    t.seconds,
-                    t.nanos
-                        .try_into()
-                        .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidExpiration))?,
-                )
-                .ok_or(PathParseError::from(PathParseErrorKind::InvalidExpiration))?,
-            ),
-            None => {
-                warn!("path without expiration");
-                None
-            }
-        };
+        let expiration = grpc_path
+            .expiration
+            .and_then(|t| {
+                u32::try_from(t.nanos)
+                    .ok()
+                    .and_then(|n| DateTime::<Utc>::from_timestamp(t.seconds, n))
+            })
+            .ok_or(PathParseError::from(PathParseErrorKind::InvalidExpiration))?;
+
         let mtu = grpc_path
             .mtu
             .try_into()
             .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidMtu))?;
+
         let interfaces = grpc_path
             .interfaces
             .into_iter()
             .map(|i| {
-                let isd_asn = IsdAsn::from(i.isd_as);
-                Ok((
-                    isd_asn,
-                    u16::try_from(i.id).map_err(|_| {
-                        PathParseError::from(PathParseErrorKind::InvalidPathInterface)
-                    })?,
-                ))
-            })
-            .collect::<Result<Vec<_>, PathParseError>>()
-            .unwrap_or_else(|e| {
-                // We cannot simply skip the problematic entries as otherwise the order would be wrong;
-                // an alternative would be to use a map instead of a vector.
-                warn!(?e, "invalid path interfaces");
-                vec![]
-            });
-        let latency = grpc_path
-            .latency
-            .into_iter()
-            .map(|mut d| {
-                d.normalize();
-                if d.seconds < 0 {
-                    Err(PathParseErrorKind::NegativeLatency.into())
+                if let Ok(id) = u16::try_from(i.id) {
+                    Some(PathInterface {
+                        isd_asn: IsdAsn::from(i.isd_as),
+                        id,
+                    })
                 } else {
-                    Duration::seconds(d.seconds)
-                        .checked_add(&Duration::nanoseconds(d.nanos.into()))
-                        .ok_or(PathParseErrorKind::InvalidLatency.into())
+                    warn!("invalid path interface");
+                    None
                 }
             })
-            .collect::<Result<Vec<_>, PathParseError>>()
-            .unwrap_or_else(|e| {
-                // We cannot simply skip the problematic entries as otherwise the order would be wrong;
-                // an alternative would be to use a map instead of a vector.
-                warn!(?e, "invalid path latencies");
-                vec![]
-            });
-        let bandwidth = grpc_path.bandwidth;
-        let geo = grpc_path
-            .geo
-            .into_iter()
-            .map(GeoCoordinates::from)
             .collect();
-        let link_type = grpc_path
-            .link_type
-            .into_iter()
-            .map(LinkType::try_from)
-            .collect::<Result<Vec<_>, PathParseError>>()
-            .unwrap_or_else(|e| {
-                // We cannot simply skip the problematic entries as otherwise the order would be wrong;
-                // an alternative would be to use a map instead of a vector.
-                warn!(?e, "invalid interface types");
-                vec![]
-            });
-        let internal_hops = grpc_path.internal_hops;
-        let notes = grpc_path.notes;
+
+        let latency = some_if_length_matches!(
+            (grpc_path.latency, expected_count_links) =>
+                into_iter()
+                .map(|mut d| {
+                    d.normalize();
+                    if d.seconds < 0 {
+                        warn!("negative path latency");
+                        None
+                    } else {
+                        Duration::seconds(d.seconds)
+                            .checked_add(&Duration::nanoseconds(d.nanos.into()))
+                    }
+                })
+                .collect()
+        );
+
+        let bandwidth_kbps = some_if_length_matches!(grpc_path.bandwidth, expected_count_links);
+
+        let geo = some_if_length_matches!((grpc_path.geo, count_interfaces) =>
+            into_iter()
+            .map(GeoCoordinates::from)
+            .collect()
+        );
+
+        let link_type = some_if_length_matches!((grpc_path.link_type, expected_count_links_inter) =>
+            into_iter()
+            .map(LinkType::from)
+            .collect()
+        );
+
+        let internal_hops =
+            some_if_length_matches!(grpc_path.internal_hops, expected_count_links_intra);
+
+        let notes = some_if_length_matches!(grpc_path.notes, expected_count_ases);
+
         let epic_auths = grpc_path.epic_auths.map(EpicAuths::from);
 
         Ok(Self {
@@ -175,7 +198,7 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
             mtu,
             interfaces,
             latency,
-            bandwidth_kbps: bandwidth,
+            bandwidth_kbps,
             geo,
             link_type,
             internal_hops,

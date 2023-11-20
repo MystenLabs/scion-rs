@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use bytes::Bytes;
 use scion_grpc::daemon::v1 as daemon_grpc;
+use tracing::{span, warn, Level};
 
 use crate::{address::IsdAsn, packet::ByEndpoint};
 
@@ -39,6 +40,11 @@ impl Path {
         mut value: daemon_grpc::Path,
         isd_asn: ByEndpoint<IsdAsn>,
     ) -> Result<Self, PathParseError> {
+        span!(
+            Level::WARN,
+            "trying to convert SCION path from gRPC to internal type"
+        );
+
         let dataplane_path = Bytes::from(std::mem::take(&mut value.raw));
         if dataplane_path.is_empty() {
             return Err(PathParseErrorKind::EmptyRaw.into());
@@ -53,7 +59,12 @@ impl Path {
                 .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidInterface))?,
             _ => return Err(PathParseErrorKind::NoInterface.into()),
         };
-        let metadata = Some(PathMetadata::try_from(value)?);
+        let metadata = PathMetadata::try_from(value)
+            .map_err(|e| {
+                warn!("{}", e);
+                e
+            })
+            .ok();
 
         Ok(Self {
             dataplane_path,
@@ -66,11 +77,10 @@ impl Path {
 
 #[cfg(test)]
 mod tests {
-    // Question(mlegner): Can we test this with real gRPC samples?
-
     use std::net::{IpAddr, Ipv4Addr};
 
     use super::*;
+    use crate::path::metadata::PathInterface;
 
     const MINIMAL_RAW_PATH: [u8; 24] = [
         0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -80,9 +90,9 @@ mod tests {
         daemon_grpc::Path {
             raw: MINIMAL_RAW_PATH.into(),
             interface: None,
-            interfaces: vec![],
+            interfaces: vec![daemon_grpc::PathInterface { isd_as: 0, id: 0 }; 2],
             mtu: 0,
-            expiration: None,
+            expiration: Some(prost_types::Timestamp::default()),
             latency: vec![],
             bandwidth: vec![],
             geo: vec![],
@@ -117,7 +127,17 @@ mod tests {
                     source: IsdAsn::WILDCARD,
                     destination: IsdAsn::WILDCARD,
                 },
-                metadata: Some(PathMetadata::default()),
+                metadata: Some(PathMetadata {
+                    interfaces: vec![
+                        Some(PathInterface {
+                            isd_asn: IsdAsn::WILDCARD,
+                            id: 0
+                        });
+                        2
+                    ],
+                    internal_hops: Some(vec![]),
+                    ..Default::default()
+                }),
             })
         )
     }
