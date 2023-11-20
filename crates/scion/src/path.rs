@@ -19,11 +19,13 @@ pub use epic::EpicAuths;
 pub mod linktype;
 use linktype::LinkType;
 
+use self::standard::StandardPath;
+
 /// A SCION end-to-end path with metadata
 #[derive(Debug, Clone, PartialEq)]
 pub struct Path {
     /// The raw bytes to be added as the path header to SCION dataplane packets
-    dataplane_path: Bytes,
+    dataplane_path: StandardPath,
     /// The underlay address (IP + port) of the next hop; i.e., the local border router
     underlay_next_hop: SocketAddr,
     /// The ISD-ASN where the path starts and ends
@@ -41,6 +43,8 @@ impl Path {
         if dataplane_path.is_empty() {
             return Err(PathParseErrorKind::EmptyRaw.into());
         };
+        let dataplane_path = StandardPath::decode_from_buffer(dataplane_path)
+            .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidRaw))?;
         let underlay_next_hop = match &value.interface {
             Some(daemon_grpc::Interface {
                 address: Some(daemon_grpc::Underlay { address }),
@@ -68,9 +72,13 @@ mod tests {
 
     use super::*;
 
+    const MINIMAL_RAW_PATH: [u8; 24] = [
+        0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+
     fn empty_grpc_path() -> daemon_grpc::Path {
         daemon_grpc::Path {
-            raw: vec![],
+            raw: MINIMAL_RAW_PATH.into(),
             interface: None,
             interfaces: vec![],
             mtu: 0,
@@ -88,7 +96,6 @@ mod tests {
     #[test]
     fn successful_conversion() {
         let mut p = empty_grpc_path();
-        p.raw = vec![1];
         p.interface = Some(daemon_grpc::Interface {
             address: Some(daemon_grpc::Underlay {
                 address: "0.0.0.0:42".into(),
@@ -103,7 +110,8 @@ mod tests {
                 }
             ),
             Ok(Path {
-                dataplane_path: Bytes::from_static(&[1]),
+                dataplane_path: StandardPath::decode_from_buffer(MINIMAL_RAW_PATH.as_slice())
+                    .unwrap(),
                 underlay_next_hop: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 42),
                 isd_asn: ByEndpoint {
                     source: IsdAsn::WILDCARD,
@@ -135,20 +143,19 @@ mod tests {
         };
     }
 
-    test_conversion_failure!(empty_raw_path, p, {}, PathParseErrorKind::EmptyRaw.into());
     test_conversion_failure!(
-        no_interface,
+        empty_raw_path,
         p,
         {
-            p.raw = vec![0];
+            p.raw = vec![];
         },
-        PathParseErrorKind::NoInterface.into()
+        PathParseErrorKind::EmptyRaw.into()
     );
+    test_conversion_failure!(no_interface, p, {}, PathParseErrorKind::NoInterface.into());
     test_conversion_failure!(
         invalid_interface,
         p,
         {
-            p.raw = vec![0];
             p.interface = Some(daemon_grpc::Interface {
                 address: Some(daemon_grpc::Underlay {
                     address: "invalid address".into(),

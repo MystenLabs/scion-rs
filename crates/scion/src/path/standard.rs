@@ -40,7 +40,7 @@ wire_encoding::bounded_uint! {
 }
 
 /// Meta information about the SCION path contained in a [`StandardPath`].
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct PathMetaHeader {
     /// An index to the current info field for the packet on its way through the network.
     pub current_info_field: InfoFieldIndex,
@@ -181,7 +181,7 @@ const fn nth_field<const N: usize>(fields: u32) -> u8 {
 /// The standard SCION path header.
 ///
 /// Consists of a [`PathMetaHeader`] along with one or more info fields and hop fields.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StandardPath {
     /// The meta information about the stored path.
     meta_header: PathMetaHeader,
@@ -195,9 +195,21 @@ impl StandardPath {
     pub fn meta_header(&self) -> &PathMetaHeader {
         &self.meta_header
     }
+
+    #[inline]
+    pub fn decode_from_buffer<T>(mut buffer: T) -> Result<Self, DecodeError>
+    where
+        T: Buf,
+    {
+        let length = buffer.remaining();
+        Self::decode_with_context(&mut buffer, length)
+    }
 }
 
-impl<T: Buf> WireDecodeWithContext<T> for StandardPath {
+impl<T> WireDecodeWithContext<T> for StandardPath
+where
+    T: Buf,
+{
     type Error = DecodeError;
     type Context = usize;
 
@@ -245,7 +257,7 @@ mod tests {
                 info: $info, hop: $hop, seg_lengths: $segs,
                 field_len: (
                     ($segs[0] + $segs[1] + $segs[2]) * 12
-                    + $segs.iter().filter(|x| **x == 0).count() * 8
+                    + $segs.iter().filter(|x| **x != 0).count() * 8
                 )
             }
         };
@@ -264,6 +276,22 @@ mod tests {
                 current_hop_field: HopFieldIndex(0),
                 reserved: PathMetaReserved(0),
                 segment_lengths: [SegmentLength(3), SegmentLength(0), SegmentLength(0)]
+            }
+        );
+    }
+
+    #[test]
+    fn valid_minimal() {
+        let data = path_bytes! {info: 0, hop: 0, seg_lengths: [1, 0, 0]};
+        let header = StandardPath::decode_from_buffer(&mut data.as_slice()).expect("valid decode");
+
+        assert_eq!(
+            *header.meta_header(),
+            PathMetaHeader {
+                current_info_field: InfoFieldIndex(0),
+                current_hop_field: HopFieldIndex(0),
+                reserved: PathMetaReserved(0),
+                segment_lengths: [SegmentLength(1), SegmentLength(0), SegmentLength(0)]
             }
         );
     }

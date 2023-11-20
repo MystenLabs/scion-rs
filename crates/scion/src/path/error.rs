@@ -33,6 +33,7 @@ pub struct PathParseError(PathParseErrorKind);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathParseErrorKind {
     EmptyRaw,
+    InvalidRaw,
     NoInterface,
     InvalidInterface,
     InvalidPathInterface,
@@ -47,6 +48,7 @@ impl Display for PathParseError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let description = match self.0 {
             PathParseErrorKind::EmptyRaw => "Empty raw path",
+            PathParseErrorKind::InvalidRaw => "Invalid raw path",
             PathParseErrorKind::NoInterface => "No underlay address for local border router",
             PathParseErrorKind::InvalidInterface => {
                 "Invalid underlay address for local border router"
