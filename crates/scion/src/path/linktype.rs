@@ -21,3 +21,22 @@ impl From<i32> for LinkType {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_values() {
+        for link_type in [
+            LinkType::Invalid,
+            LinkType::Unset,
+            LinkType::Core,
+            LinkType::Parent,
+            LinkType::Child,
+            LinkType::Peer,
+        ] {
+            assert_eq!(link_type, LinkType::from(link_type as i32));
+        }
+    }
+}

@@ -80,78 +80,55 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
     use super::*;
-    use crate::path::metadata::PathInterface;
-
-    const MINIMAL_RAW_PATH: [u8; 24] = [
-        0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    ];
-
-    fn empty_grpc_path() -> daemon_grpc::Path {
-        daemon_grpc::Path {
-            raw: MINIMAL_RAW_PATH.into(),
-            interface: None,
-            interfaces: vec![daemon_grpc::PathInterface { isd_as: 0, id: 0 }; 2],
-            mtu: 0,
-            expiration: Some(prost_types::Timestamp::default()),
-            latency: vec![],
-            bandwidth: vec![],
-            geo: vec![],
-            link_type: vec![],
-            internal_hops: vec![],
-            notes: vec![],
-            epic_auths: None,
-        }
-    }
+    use crate::path::metadata::{test_utils::*, PathInterface};
 
     #[test]
     fn successful_conversion() {
-        let mut p = empty_grpc_path();
-        p.interface = Some(daemon_grpc::Interface {
-            address: Some(daemon_grpc::Underlay {
-                address: "0.0.0.0:42".into(),
-            }),
-        });
-        assert_eq!(
-            Path::try_from_grpc_with_endpoints(
-                p,
-                ByEndpoint {
-                    source: IsdAsn::WILDCARD,
-                    destination: IsdAsn::WILDCARD
-                }
-            ),
-            Ok(Path {
-                dataplane_path: StandardPath::decode_from_buffer(MINIMAL_RAW_PATH.as_slice())
-                    .unwrap(),
-                underlay_next_hop: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 42),
-                isd_asn: ByEndpoint {
-                    source: IsdAsn::WILDCARD,
-                    destination: IsdAsn::WILDCARD,
-                },
-                metadata: Some(PathMetadata {
-                    interfaces: vec![
-                        Some(PathInterface {
-                            isd_asn: IsdAsn::WILDCARD,
-                            id: 0
-                        });
-                        2
-                    ],
-                    internal_hops: Some(vec![]),
-                    ..Default::default()
-                }),
-            })
+        let path = Path::try_from_grpc_with_endpoints(
+            minimal_grpc_path(),
+            ByEndpoint {
+                source: IsdAsn::WILDCARD,
+                destination: IsdAsn::WILDCARD,
+            },
         )
+        .expect("conversion should succeed");
+        assert_eq!(
+            path.underlay_next_hop,
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 42)
+        );
+        assert_eq!(
+            path.isd_asn,
+            ByEndpoint {
+                source: IsdAsn::WILDCARD,
+                destination: IsdAsn::WILDCARD,
+            }
+        );
+        assert_eq!(
+            path.metadata,
+            Some(PathMetadata {
+                interfaces: vec![
+                    Some(PathInterface {
+                        isd_asn: IsdAsn::WILDCARD,
+                        id: 0
+                    });
+                    2
+                ],
+                internal_hops: Some(vec![]),
+                ..Default::default()
+            })
+        );
     }
 
     macro_rules! test_conversion_failure {
-        ($name:ident, $path:ident, $statements:block, $error:expr) => {
+        ($name:ident; $($field:ident : $value:expr),* ; $error:expr) => {
             #[test]
             fn $name() {
-                #[allow(unused_mut)] // False positive
-                let mut $path = empty_grpc_path();
-                $statements
                 assert_eq!(
                     Path::try_from_grpc_with_endpoints(
-                        $path,
+                        daemon_grpc::Path {
+                            $($field : $value,)*
+                            ..minimal_grpc_path()
+                        },
                         ByEndpoint {
                             source: IsdAsn::WILDCARD,
                             destination: IsdAsn::WILDCARD,
@@ -164,24 +141,18 @@ mod tests {
     }
 
     test_conversion_failure!(
-        empty_raw_path,
-        p,
-        {
-            p.raw = vec![];
-        },
+        empty_raw_path;
+        raw: vec![];
         PathParseErrorKind::EmptyRaw.into()
     );
-    test_conversion_failure!(no_interface, p, {}, PathParseErrorKind::NoInterface.into());
+    test_conversion_failure!(no_interface; interface: None; PathParseErrorKind::NoInterface.into());
     test_conversion_failure!(
-        invalid_interface,
-        p,
-        {
-            p.interface = Some(daemon_grpc::Interface {
-                address: Some(daemon_grpc::Underlay {
-                    address: "invalid address".into(),
-                }),
-            });
-        },
+        invalid_interface;
+        interface: Some(daemon_grpc::Interface {
+            address: Some(daemon_grpc::Underlay {
+                address: "invalid address".into(),
+            }),
+        });
         PathParseErrorKind::InvalidInterface.into()
     );
 }

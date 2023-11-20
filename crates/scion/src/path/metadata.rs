@@ -207,3 +207,83 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
         })
     }
 }
+
+#[cfg(test)]
+pub mod test_utils {
+    use super::*;
+
+    pub const MINIMAL_RAW_PATH: [u8; 24] = [
+        0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+
+    pub fn minimal_grpc_path() -> daemon_grpc::Path {
+        daemon_grpc::Path {
+            raw: MINIMAL_RAW_PATH.into(),
+            interface: Some(daemon_grpc::Interface {
+                address: Some(daemon_grpc::Underlay {
+                    address: "0.0.0.0:42".into(),
+                }),
+            }),
+            interfaces: vec![daemon_grpc::PathInterface { isd_as: 0, id: 0 }; 2],
+            mtu: 0,
+            expiration: Some(prost_types::Timestamp::default()),
+            latency: vec![],
+            bandwidth: vec![],
+            geo: vec![],
+            link_type: vec![],
+            internal_hops: vec![],
+            notes: vec![],
+            epic_auths: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use prost_types::Timestamp;
+
+    use super::{test_utils::*, *};
+
+    macro_rules! test_invalid_metadata {
+        ($name:ident; $($field:ident : $value:expr),*; $error_type:expr) => {
+            #[test]
+            fn $name() {
+                assert_eq!(PathMetadata::try_from(daemon_grpc::Path {
+                    $($field : $value,)*
+                    ..minimal_grpc_path()
+                }), Err($error_type.into()))
+            }
+        };
+    }
+
+    test_invalid_metadata!(
+        empty_interfaces;
+        interfaces: vec![];
+        PathParseErrorKind::InvalidNumberOfInterfaces
+    );
+    test_invalid_metadata!(
+        single_interfaces;
+        interfaces: vec![daemon_grpc::PathInterface{ isd_as: 0, id: 0 }];
+        PathParseErrorKind::InvalidNumberOfInterfaces
+    );
+    test_invalid_metadata!(
+        missing_mtu;
+        mtu: u32::from(u16::MAX) + 1;
+        PathParseErrorKind::InvalidMtu
+    );
+    test_invalid_metadata!(
+        missing_expiration;
+        expiration: None;
+        PathParseErrorKind::InvalidExpiration
+    );
+    test_invalid_metadata!(
+        negative_expiration_nanos;
+        expiration: Some(Timestamp{ seconds: 0, nanos: -1 });
+        PathParseErrorKind::InvalidExpiration
+    );
+    test_invalid_metadata!(
+        invalid_expiration;
+        expiration: Some(Timestamp{ seconds: i64::MAX, nanos: 0 });
+        PathParseErrorKind::InvalidExpiration
+    );
+}
