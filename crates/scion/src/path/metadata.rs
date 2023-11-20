@@ -5,8 +5,17 @@ use chrono::{DateTime, Duration, Utc};
 use scion_grpc::daemon::v1 as daemon_grpc;
 use tracing::{span, warn, Level};
 
-use super::{EpicAuths, LinkType, PathParseError};
+use super::{EpicAuths, PathParseError};
 use crate::{address::IsdAsn, packet::ByEndpoint, path::error::PathParseErrorKind};
+
+pub mod linktype;
+pub use linktype::LinkType;
+
+pub mod geo;
+pub use geo::GeoCoordinates;
+
+pub mod path_interface;
+pub use path_interface::PathInterface;
 
 /// A SCION end-to-end path with metadata
 #[derive(Debug, Clone, PartialEq)]
@@ -64,32 +73,6 @@ pub struct PathMetadata {
     pub epic_auths: Option<EpicAuths>,
 }
 
-/// Geographic coordinates with latitude and longitude
-// Using a custom type to prevent importing a library here
-#[derive(PartialEq, Clone, Debug, Default)]
-pub struct GeoCoordinates {
-    pub lat: f32,
-    pub long: f32,
-    pub address: String,
-}
-
-/// SCION interface with the AS's ISD-ASN and the interface's ID
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PathInterface {
-    pub isd_asn: IsdAsn,
-    pub id: u16,
-}
-
-impl From<daemon_grpc::GeoCoordinates> for GeoCoordinates {
-    fn from(value: daemon_grpc::GeoCoordinates) -> Self {
-        Self {
-            lat: value.latitude,
-            long: value.longitude,
-            address: value.address,
-        }
-    }
-}
-
 macro_rules! some_if_length_matches {
     ($input_vec:expr, $expected_length:expr, $result:expr) => {
         if $input_vec.len() == $expected_length {
@@ -143,17 +126,7 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
         let interfaces = grpc_path
             .interfaces
             .into_iter()
-            .map(|i| {
-                if let Ok(id) = u16::try_from(i.id) {
-                    Some(PathInterface {
-                        isd_asn: IsdAsn::from(i.isd_as),
-                        id,
-                    })
-                } else {
-                    warn!("invalid path interface");
-                    None
-                }
-            })
+            .map(|i| i.try_into().map_err(|e| warn!("{}", e)).ok())
             .collect();
 
         let latency = some_if_length_matches!(

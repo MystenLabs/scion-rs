@@ -36,6 +36,7 @@ pub enum PathParseErrorKind {
     InvalidRaw,
     NoInterface,
     InvalidInterface,
+    InvalidPathInterface,
     InvalidNumberOfInterfaces,
     InvalidExpiration,
     InvalidMtu,
@@ -50,6 +51,7 @@ impl Display for PathParseError {
             PathParseErrorKind::InvalidInterface => {
                 "Invalid underlay address for local border router"
             }
+            PathParseErrorKind::InvalidPathInterface => "Invalid SCION interface",
             PathParseErrorKind::InvalidNumberOfInterfaces => {
                 "Path metadata contains zero or an odd number of interfaces"
             }

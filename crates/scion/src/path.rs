@@ -12,17 +12,14 @@ pub use error::{DataplanePathErrorKind, PathParseError, PathParseErrorKind};
 pub mod standard;
 
 mod metadata;
-pub use metadata::PathMetadata;
+pub use metadata::{GeoCoordinates, LinkType, PathInterface, PathMetadata};
 
 pub mod epic;
 pub use epic::EpicAuths;
 
-pub mod linktype;
-use linktype::LinkType;
-
 use self::standard::StandardPath;
 
-/// A SCION end-to-end path with metadata
+/// A SCION end-to-end path with optional metadata
 #[derive(Debug, Clone, PartialEq)]
 pub struct Path {
     /// The raw bytes to be added as the path header to SCION dataplane packets
