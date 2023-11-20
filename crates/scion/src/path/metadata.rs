@@ -1,12 +1,9 @@
-use std::net::SocketAddr;
-
-use bytes::Bytes;
 use chrono::{DateTime, Duration, Utc};
 use scion_grpc::daemon::v1 as daemon_grpc;
-use tracing::{span, warn, Level};
+use tracing::warn;
 
 use super::{EpicAuths, PathParseError};
-use crate::{address::IsdAsn, packet::ByEndpoint, path::error::PathParseErrorKind};
+use crate::path::error::PathParseErrorKind;
 
 pub mod linktype;
 pub use linktype::LinkType;
@@ -16,19 +13,6 @@ pub use geo::GeoCoordinates;
 
 pub mod path_interface;
 pub use path_interface::PathInterface;
-
-/// A SCION end-to-end path with metadata
-#[derive(Debug, Clone, PartialEq)]
-pub struct Path {
-    /// The raw bytes to be added as the path header to SCION dataplane packets
-    dataplane_path: Bytes,
-    /// The underlay address (IP + port) of the next hop; i.e., the local border router
-    underlay_next_hop: SocketAddr,
-    /// The ISD-ASN where the path starts and ends
-    pub isd_asn: ByEndpoint<IsdAsn>,
-    /// Path metadata
-    metadata: Option<PathMetadata>,
-}
 
 /// Metadata of SCION end-to-end paths
 ///
@@ -92,12 +76,8 @@ macro_rules! some_if_length_matches {
 impl TryFrom<daemon_grpc::Path> for PathMetadata {
     type Error = PathParseError;
 
+    #[tracing::instrument]
     fn try_from(grpc_path: daemon_grpc::Path) -> Result<Self, Self::Error> {
-        span!(
-            Level::WARN,
-            "trying to convert metadata from gRPC path to internal type"
-        );
-
         // We check that the metadata is itself consistent, including the lengths of various metadata vectors.
         // We *do not* check if it is consistent with the raw dataplane path.
         let count_interfaces = grpc_path.interfaces.len();
@@ -111,11 +91,7 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
 
         let expiration = grpc_path
             .expiration
-            .and_then(|t| {
-                u32::try_from(t.nanos)
-                    .ok()
-                    .and_then(|n| DateTime::<Utc>::from_timestamp(t.seconds, n))
-            })
+            .and_then(|t| DateTime::from_timestamp(t.seconds, t.nanos.try_into().ok()?))
             .ok_or(PathParseError::from(PathParseErrorKind::InvalidExpiration))?;
 
         let mtu = grpc_path

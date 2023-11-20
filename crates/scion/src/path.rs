@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use bytes::Bytes;
 use scion_grpc::daemon::v1 as daemon_grpc;
-use tracing::{span, warn, Level};
+use tracing::warn;
 
 use crate::{address::IsdAsn, packet::ByEndpoint};
 
@@ -33,21 +33,18 @@ pub struct Path {
 }
 
 impl Path {
+    #[tracing::instrument]
     pub fn try_from_grpc_with_endpoints(
         mut value: daemon_grpc::Path,
         isd_asn: ByEndpoint<IsdAsn>,
     ) -> Result<Self, PathParseError> {
-        span!(
-            Level::WARN,
-            "trying to convert SCION path from gRPC to internal type"
-        );
-
         let dataplane_path = Bytes::from(std::mem::take(&mut value.raw));
         if dataplane_path.is_empty() {
             return Err(PathParseErrorKind::EmptyRaw.into());
         };
         let dataplane_path = StandardPath::decode_from_buffer(dataplane_path)
             .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidRaw))?;
+
         let underlay_next_hop = match &value.interface {
             Some(daemon_grpc::Interface {
                 address: Some(daemon_grpc::Underlay { address }),
@@ -56,6 +53,7 @@ impl Path {
                 .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidInterface))?,
             _ => return Err(PathParseErrorKind::NoInterface.into()),
         };
+
         let metadata = PathMetadata::try_from(value)
             .map_err(|e| {
                 warn!("{}", e);
