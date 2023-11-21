@@ -8,7 +8,7 @@
 use bytes::{Buf, Bytes};
 
 use crate::{
-    path::PathErrorKind,
+    path::DataplanePathErrorKind,
     wire_encoding::{WireDecode, WireDecodeWithContext},
 };
 
@@ -24,8 +24,8 @@ pub use path_header::PathHeader;
 /// Instances of an object associated with both a source and destination endpoint.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ByEndpoint<T> {
-    destination: T,
-    source: T,
+    pub destination: T,
+    pub source: T,
 }
 
 /// A SCION network packet.
@@ -92,11 +92,11 @@ pub enum DecodeError {
     #[error("attempted to decode the empty path type")]
     EmptyPath,
     #[error("invalid path header: {0}")]
-    InvalidPath(PathErrorKind),
+    InvalidPath(DataplanePathErrorKind),
 }
 
-impl From<PathErrorKind> for DecodeError {
-    fn from(value: PathErrorKind) -> Self {
+impl From<DataplanePathErrorKind> for DecodeError {
+    fn from(value: DataplanePathErrorKind) -> Self {
         Self::InvalidPath(value)
     }
 }
