@@ -1,10 +1,13 @@
 use scion_grpc::daemon::{v1 as daemon_grpc, v1::daemon_service_client::DaemonServiceClient};
+use scion_proto::{address::IsdAsn, packet::ByEndpoint, path::Path};
 use thiserror::Error;
 use tonic::transport::Channel;
 use tracing::warn;
 
-use super::{messages::PathRequest, AsInfo};
-use crate::{address::IsdAsn, packet::ByEndpoint, path::Path};
+use super::{
+    messages::{self, PathRequest},
+    AsInfo,
+};
 
 #[derive(Debug, Error)]
 pub enum DaemonClientError {
@@ -48,7 +51,7 @@ impl DaemonClient {
     /// about the local AS.
     pub async fn as_info(&self, isd_asn: IsdAsn) -> Result<AsInfo, DaemonClientError> {
         self.client()
-            .r#as(daemon_grpc::AsRequest::from(isd_asn))
+            .r#as(messages::sas_request_from(isd_asn))
             .await?
             .into_inner()
             .try_into()
