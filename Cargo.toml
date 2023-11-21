@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+    "crates/scion",
     "crates/scion-grpc",
     "crates/scion-proto",
 ]

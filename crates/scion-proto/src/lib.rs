@@ -1,5 +1,4 @@
 pub mod address;
-pub mod daemon;
 pub mod packet;
 pub mod path;
 pub mod reliable;

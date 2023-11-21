@@ -1,14 +1,11 @@
 use std::num::TryFromIntError;
 
 use scion_grpc::daemon::v1::{self as daemon_grpc};
+use scion_proto::address::IsdAsn;
 
-use crate::address::IsdAsn;
-
-impl From<IsdAsn> for daemon_grpc::AsRequest {
-    fn from(value: IsdAsn) -> Self {
-        Self {
-            isd_as: value.as_u64(),
-        }
+pub fn sas_request_from(value: IsdAsn) -> daemon_grpc::AsRequest {
+    daemon_grpc::AsRequest {
+        isd_as: value.as_u64(),
     }
 }
 
@@ -95,7 +92,7 @@ mod tests {
         #[test]
         fn request_conversion() {
             assert_eq!(
-                daemon_grpc::AsRequest::from(IsdAsn::from(42)),
+                sas_request_from(IsdAsn::from(42)),
                 daemon_grpc::AsRequest { isd_as: 42 }
             )
         }
