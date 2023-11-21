@@ -56,10 +56,7 @@ impl DaemonClient {
     }
 
     /// Request a set of end-to-end paths between the source and destination AS
-    pub async fn paths(
-        &self,
-        request: &PathRequest,
-    ) -> Result<impl Iterator<Item = Path>, DaemonClientError> {
+    pub async fn paths(&self, request: &PathRequest) -> Result<Paths, DaemonClientError> {
         let src_isd_asn = if request.source.is_wildcard() {
             self.local_isd_asn
         } else {
@@ -69,18 +66,16 @@ impl DaemonClient {
             source: src_isd_asn,
             destination: request.destination,
         };
-        Ok(self
-            .client()
-            .paths(daemon_grpc::PathsRequest::from(request))
-            .await?
-            .into_inner()
-            .paths
-            .into_iter()
-            .map(move |grpc_path| Path::try_from_grpc_with_endpoints(grpc_path, isd_asn))
-            .filter_map(|x| {
-                x.map_err(|e| warn!(?e, "a parse error occurred for a path"))
-                    .ok()
-            }))
+        Ok(Paths {
+            isd_asn,
+            grpc_paths: self
+                .client()
+                .paths(daemon_grpc::PathsRequest::from(request))
+                .await?
+                .into_inner()
+                .paths
+                .into_iter(),
+        })
     }
 
     #[inline]
@@ -93,5 +88,25 @@ impl DaemonClient {
 
     fn client(&self) -> DaemonServiceClient<Channel> {
         DaemonServiceClient::new(self.connection.clone())
+    }
+}
+
+/// Iterator for SCION [Path]s obtained from the SCION Daemon via gRPC
+pub struct Paths {
+    isd_asn: ByEndpoint<IsdAsn>,
+    grpc_paths: std::vec::IntoIter<daemon_grpc::Path>,
+}
+
+impl Iterator for Paths {
+    type Item = Path;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for grpc_path in self.grpc_paths.by_ref() {
+            match Path::try_from_grpc_with_endpoints(grpc_path, self.isd_asn) {
+                Ok(path) => return Some(path),
+                Err(e) => warn!(?e, "a parse error occurred for a path"),
+            }
+        }
+        None
     }
 }
