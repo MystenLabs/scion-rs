@@ -42,20 +42,25 @@ impl DaemonClient {
                 .await?,
             local_isd_asn: IsdAsn::WILDCARD,
         };
-        client.local_isd_asn = client.as_info(IsdAsn::WILDCARD).await?.isd_asn;
+        client.local_isd_asn = client.sas_info(IsdAsn::WILDCARD).await?.isd_asn;
 
         Ok(client)
     }
 
     /// Request information about an AS; [`IsdAsn::WILDCARD`] can be used to obtain information
     /// about the local AS.
-    pub async fn as_info(&self, isd_asn: IsdAsn) -> Result<AsInfo, DaemonClientError> {
+    pub async fn sas_info(&self, isd_asn: IsdAsn) -> Result<AsInfo, DaemonClientError> {
         self.client()
             .r#as(messages::sas_request_from(isd_asn))
             .await?
             .into_inner()
             .try_into()
             .map_err(|_| DaemonClientError::InvalidData)
+    }
+
+    #[inline]
+    pub async fn local_sas_info(&self) -> Result<AsInfo, DaemonClientError> {
+        self.sas_info(IsdAsn::WILDCARD).await
     }
 
     /// Request a set of end-to-end paths between the source and destination AS
@@ -82,10 +87,7 @@ impl DaemonClient {
     }
 
     #[inline]
-    pub async fn paths_to(
-        &self,
-        destination: IsdAsn,
-    ) -> Result<impl Iterator<Item = Path>, DaemonClientError> {
+    pub async fn paths_to(&self, destination: IsdAsn) -> Result<Paths, DaemonClientError> {
         self.paths(&PathRequest::new(destination)).await
     }
 
@@ -95,6 +97,7 @@ impl DaemonClient {
 }
 
 /// Iterator for SCION [Path]s obtained from the SCION Daemon via gRPC
+#[derive(Debug)]
 pub struct Paths {
     isd_asn: ByEndpoint<IsdAsn>,
     grpc_paths: std::vec::IntoIter<daemon_grpc::Path>,
