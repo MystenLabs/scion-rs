@@ -1,3 +1,5 @@
+use std::num::{NonZeroU32, NonZeroU64};
+
 use chrono::{DateTime, Duration, Utc};
 use scion_grpc::daemon::v1 as daemon_grpc;
 use tracing::warn;
@@ -32,14 +34,10 @@ pub struct PathMetadata {
     pub latency: Option<Vec<Option<Duration>>>,
     /// The bandwidth between any two consecutive interfaces, in kbps.
     /// Entry i describes the bandwidth between interfaces i and i+1.
-    /// A 0-value indicates that the AS did not announce a bandwidth for this
-    /// hop.
-    pub bandwidth_kbps: Option<Vec<u64>>,
+    pub bandwidth_kbps: Option<Vec<Option<NonZeroU64>>>,
     /// Geographical position of the border routers along the path.
     /// Entry i describes the position of the router for interface i.
-    /// A 0-value indicates that the AS did not announce a position for this
-    /// router.
-    pub geo: Option<Vec<GeoCoordinates>>,
+    pub geo: Option<Vec<Option<GeoCoordinates>>>,
     /// LinkType contains the announced link type of inter-domain links.
     /// Entry i describes the link between interfaces 2*i and 2*i+1.
     pub link_type: Option<Vec<LinkType>>,
@@ -48,11 +46,11 @@ pub struct PathMetadata {
     /// AS.
     /// Consequently, there are no entries for the first and last ASes, as these
     /// are not traversed completely by the path.
-    pub internal_hops: Option<Vec<u32>>,
+    pub internal_hops: Option<Vec<Option<NonZeroU32>>>,
     /// Notes added by ASes on the path, in the order of occurrence.
     /// Entry i is the note of AS i on the path.
     pub notes: Option<Vec<String>>,
-    /// EpicAuths contains the EPIC authenticators used to calculate the PHVF and LHVF.
+    /// Optional EPIC-HP authenticators used to calculate the PHVF and LHVF.
     pub epic_auths: Option<EpicAuths>,
 }
 
@@ -108,29 +106,40 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
             (grpc_path.latency, expected_count_links) =>
                 into_iter()
                 .map(|d| {
-                        Duration::seconds(d.seconds)
-                            .checked_add(&Duration::nanoseconds(d.nanos.into()))
+                    Duration::seconds(d.seconds)
+                        .checked_add(&Duration::nanoseconds(d.nanos.into()))
                         .filter(|d| d >= &Duration::zero())
                 })
                 .collect()
         );
 
-        let bandwidth_kbps = some_if_length_matches!(grpc_path.bandwidth, expected_count_links);
-
-        let geo = some_if_length_matches!((grpc_path.geo, count_interfaces) =>
-            into_iter()
-            .map(GeoCoordinates::from)
-            .collect()
+        let bandwidth_kbps = some_if_length_matches!(
+            (grpc_path.bandwidth, expected_count_links) =>
+                into_iter()
+                .map(NonZeroU64::new)
+                .collect()
         );
 
-        let link_type = some_if_length_matches!((grpc_path.link_type, expected_count_links_inter) =>
-            into_iter()
-            .map(LinkType::from)
-            .collect()
+        let geo = some_if_length_matches!(
+            (grpc_path.geo, count_interfaces) =>
+                into_iter()
+                .map(GeoCoordinates::from_grpc_or_none)
+                .collect()
         );
 
-        let internal_hops =
-            some_if_length_matches!(grpc_path.internal_hops, expected_count_links_intra);
+        let link_type = some_if_length_matches!(
+            (grpc_path.link_type, expected_count_links_inter) =>
+                into_iter()
+                .map(LinkType::from)
+                .collect()
+        );
+
+        let internal_hops = some_if_length_matches!(
+            (grpc_path.internal_hops, expected_count_links_intra) =>
+                into_iter()
+                .map(NonZeroU32::new)
+                .collect()
+        );
 
         let notes = some_if_length_matches!(grpc_path.notes, expected_count_ases);
 

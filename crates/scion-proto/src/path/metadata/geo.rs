@@ -19,6 +19,12 @@ impl From<daemon_grpc::GeoCoordinates> for GeoCoordinates {
     }
 }
 
+impl GeoCoordinates {
+    pub(crate) fn from_grpc_or_none(value: daemon_grpc::GeoCoordinates) -> Option<Self> {
+        Some(value.into()).filter(|g| g != &GeoCoordinates::default())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
