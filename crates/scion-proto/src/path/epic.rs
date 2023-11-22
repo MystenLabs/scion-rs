@@ -5,9 +5,9 @@ use scion_grpc::daemon::v1 as daemon_grpc;
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct EpicAuths {
     /// Key to compute the penultimate hop validation field
-    phvf: Bytes,
+    pub phvf: Bytes,
     /// Key to compute the last hop validation field
-    lhvf: Bytes,
+    pub lhvf: Bytes,
 }
 
 impl From<daemon_grpc::EpicAuths> for EpicAuths {

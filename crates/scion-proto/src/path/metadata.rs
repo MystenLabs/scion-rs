@@ -46,6 +46,8 @@ pub struct PathMetadata {
     /// AS.
     /// Consequently, there are no entries for the first and last ASes, as these
     /// are not traversed completely by the path.
+    // Question(mlegner): Maybe a value of 0 would make sense as well? But then we
+    // cannot distinguish between unset values and an explicit 0.
     pub internal_hops: Option<Vec<Option<NonZeroU32>>>,
     /// Notes added by ASes on the path, in the order of occurrence.
     /// Entry i is the note of AS i on the path.
@@ -176,9 +178,9 @@ pub mod test_utils {
                     address: "0.0.0.0:42".into(),
                 }),
             }),
-            interfaces: vec![daemon_grpc::PathInterface { isd_as: 0, id: 0 }; 2],
-            mtu: 0,
             expiration: Some(prost_types::Timestamp::default()),
+            mtu: 0,
+            interfaces: vec![daemon_grpc::PathInterface { isd_as: 0, id: 0 }; 2],
             latency: vec![],
             bandwidth: vec![],
             geo: vec![],
@@ -192,9 +194,159 @@ pub mod test_utils {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use bytes::Bytes;
     use prost_types::Timestamp;
 
     use super::{test_utils::*, *};
+    use crate::address::{Asn, Isd, IsdAsn};
+
+    #[test]
+    fn valid_values() {
+        assert_eq!(
+            PathMetadata::try_from(daemon_grpc::Path {
+                expiration: Some(prost_types::Timestamp::date(2023, 11, 22).expect("valid date")),
+                mtu: 1472,
+                interfaces: vec![
+                    daemon_grpc::PathInterface {
+                        isd_as: 281_474_976_710_698,
+                        id: 42
+                    },
+                    daemon_grpc::PathInterface {
+                        isd_as: 281_474_976_710_699,
+                        id: 1
+                    },
+                    daemon_grpc::PathInterface {
+                        isd_as: 281_474_976_710_699,
+                        id: 2
+                    },
+                    daemon_grpc::PathInterface {
+                        isd_as: 11_821_949_021_847_553,
+                        id: 314
+                    }
+                ],
+                latency: vec![
+                    prost_types::Duration {
+                        seconds: 3,
+                        nanos: 14
+                    },
+                    prost_types::Duration {
+                        seconds: 0,
+                        nanos: 0
+                    },
+                    prost_types::Duration {
+                        seconds: 0,
+                        nanos: 42
+                    }
+                ],
+                bandwidth: vec![1000, 2000, 3000],
+                geo: vec![
+                    daemon_grpc::GeoCoordinates {
+                        latitude: 47.37,
+                        longitude: 8.55,
+                        address: "Zurich".into()
+                    };
+                    4
+                ],
+                link_type: vec![2, 1],
+                internal_hops: vec![1],
+                notes: vec!["AS1".into(), "AS2".into(), "AS3".into()],
+                epic_auths: Some(daemon_grpc::EpicAuths {
+                    auth_phvf: vec![0; 24],
+                    auth_lhvf: vec![1; 24],
+                }),
+                ..minimal_grpc_path()
+            }),
+            Ok(PathMetadata {
+                expiration: DateTime::<Utc>::from_str("2023-11-22T00:00:00Z").expect("valid date"),
+                mtu: 1472,
+                interfaces: vec![
+                    Some(PathInterface {
+                        isd_asn: IsdAsn::new(Isd::new(1), Asn::new(42)),
+                        id: 42,
+                    }),
+                    Some(PathInterface {
+                        isd_asn: IsdAsn::new(Isd::new(1), Asn::new(43)),
+                        id: 1,
+                    }),
+                    Some(PathInterface {
+                        isd_asn: IsdAsn::new(Isd::new(1), Asn::new(43)),
+                        id: 2,
+                    }),
+                    Some(PathInterface {
+                        isd_asn: IsdAsn::new(Isd::new(42), Asn::new(1)),
+                        id: 314,
+                    })
+                ],
+                latency: Some(vec![
+                    Some(
+                        Duration::seconds(3)
+                            .checked_add(&Duration::nanoseconds(14))
+                            .expect("valid duration")
+                    ),
+                    Some(Duration::zero()),
+                    Some(Duration::nanoseconds(42)),
+                ]),
+                bandwidth_kbps: Some(vec![
+                    NonZeroU64::new(1000),
+                    NonZeroU64::new(2000),
+                    NonZeroU64::new(3000)
+                ]),
+                geo: Some(vec![
+                    Some(GeoCoordinates {
+                        lat: 47.37,
+                        long: 8.55,
+                        address: "Zurich".into()
+                    });
+                    4
+                ]),
+                link_type: Some(vec![LinkType::Parent, LinkType::Core]),
+                internal_hops: Some(vec![NonZeroU32::new(1)]),
+                notes: Some(vec!["AS1".into(), "AS2".into(), "AS3".into()]),
+                epic_auths: Some(EpicAuths {
+                    phvf: Bytes::from_static(&[0; 24]),
+                    lhvf: Bytes::from_static(&[1; 24]),
+                }),
+            })
+        )
+    }
+
+    #[test]
+    fn unset_values() {
+        assert_eq!(
+            PathMetadata::try_from(daemon_grpc::Path {
+                interfaces: vec![
+                    daemon_grpc::PathInterface {
+                        isd_as: 0,
+                        id: u64::from(u16::MAX) + 1
+                    };
+                    4
+                ],
+                latency: vec![
+                    prost_types::Duration {
+                        seconds: 0,
+                        nanos: -1
+                    };
+                    3
+                ],
+                bandwidth: vec![0; 3],
+                geo: vec![daemon_grpc::GeoCoordinates::default(); 4],
+                link_type: vec![0, -1],
+                internal_hops: vec![0],
+                ..minimal_grpc_path()
+            }),
+            Ok(PathMetadata {
+                interfaces: vec![None; 4],
+                latency: Some(vec![None; 3]),
+                bandwidth_kbps: Some(vec![None; 3]),
+                geo: Some(vec![None; 4]),
+                link_type: Some(vec![LinkType::Unset, LinkType::Invalid]),
+                internal_hops: Some(vec![None]),
+                ..PathMetadata::default()
+            })
+        )
+    }
 
     macro_rules! test_invalid_metadata {
         ($name:ident; $($field:ident : $value:expr),*; $error_type:expr) => {
@@ -238,4 +390,34 @@ mod tests {
         expiration: Some(Timestamp{ seconds: i64::MAX, nanos: 0 });
         PathParseErrorKind::InvalidExpiration
     );
+
+    mod macro_tests {
+        #[test]
+        fn correct_length_without_method() {
+            assert_eq!(some_if_length_matches!(vec![0; 2], 2), Some(vec![0; 2]));
+        }
+
+        #[test]
+        fn correct_length_with_method() {
+            assert_eq!(
+                some_if_length_matches!(
+                    (vec![0; 2], 2) => into_iter().map(|x| x+1).collect()
+                ),
+                Some(vec![1; 2])
+            );
+        }
+
+        #[test]
+        fn incorrect_length() {
+            assert!(some_if_length_matches!(vec![0; 2], 1).is_none());
+        }
+
+        #[test]
+        fn incorrect_length_with_method() {
+            assert!(some_if_length_matches!(
+                (vec![0; 2], 1) => into_iter()
+            )
+            .is_none());
+        }
+    }
 }
