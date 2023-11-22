@@ -51,6 +51,19 @@ cargo tarpaulin --workspace --all-targets --doc --out html
 This creates a file `tarpaulin-report.html`, which shows you coverage statistics as well as which individual lines are or aren't covered by tests.
 Other valid output formats are `json`, `stdout`, `xml`, and `lcov`.
 
+## Integration tests
+
+Most integration tests are disabled by default because they depend on certain running SCION applications.
+You can run the full test suite (including integration tests) by executing `cargo test -- --ignored`.
+
+Some integration tests allow you to control addresses of SCION components and other data through environment variables.
+For example, if your SCION Daemon is accessible at `192.168.0.42:12345` instead of the default `localhost:30255`, you
+can run tests like this:
+
+```sh
+DAEMON_ADDRESS="http://192.168.0.42:12345" cargo test -- --ignored
+```
+
 ## Signed commits
 
 We appreciate it if you configure Git to [sign your commits](https://gist.github.com/troyfontaine/18c9146295168ee9ca2b30c00bd1b41e).
