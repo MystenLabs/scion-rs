@@ -29,7 +29,6 @@ pub struct PathMetadata {
     /// Latencies between any two consecutive interfaces.
     /// Entry i describes the latency between interface i and i+1.
     /// Consequently, there are N-1 entries for N interfaces.
-    /// A 0-value indicates that the AS did not announce a latency for this hop.
     pub latency: Option<Vec<Option<Duration>>>,
     /// The bandwidth between any two consecutive interfaces, in kbps.
     /// Entry i describes the bandwidth between interfaces i and i+1.
@@ -108,15 +107,10 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
         let latency = some_if_length_matches!(
             (grpc_path.latency, expected_count_links) =>
                 into_iter()
-                .map(|mut d| {
-                    d.normalize();
-                    if d.seconds < 0 {
-                        warn!("negative path latency");
-                        None
-                    } else {
+                .map(|d| {
                         Duration::seconds(d.seconds)
                             .checked_add(&Duration::nanoseconds(d.nanos.into()))
-                    }
+                        .filter(|d| d >= &Duration::zero())
                 })
                 .collect()
         );
