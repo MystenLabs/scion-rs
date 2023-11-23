@@ -1,16 +1,48 @@
 name: Setup SCION
 description: Setup SCION and run local topology and verify that it works
+inputs:
+  scion-bin-path:
+    description: The path where SCION binaries are installed
+    default: "./scion/bin"
+  scion-ref:
+    description: The branch or tag to use for the scionproto/scion repository
+    default: "master"
+
 outputs:
   daemon-address-as111:
     description: The address (including port) of AS 1-ff00:0:112
     value: "${{ steps.local-topology.outputs.daemon-address-as111 }}"
+  cache-hit:
+    description: Whether the SCION binaries were restored from cache
+    value: "${{ steps.cache-restore.outputs.cache-hit }}"
+  cache-primary-key:
+    description: The primary key for the cache
+    value: "${{ steps.cache-restore.outputs.cache-primary-key }}"
+  scion-bin-path:
+    description: The path where SCION binaries are installed
+    value: "${{ inputs.scion-bin-path }}"
 
 runs:
   using: composite
   steps:
     - name: Clone SCION repository
-      run: git clone https://github.com/scionproto/scion
+      run: >
+        git clone https://github.com/scionproto/scion
+        --depth 1
+        --branch ${{ inputs.scion-ref }}
       shell: bash
+    - name: Get Git commit hash
+      id: git-hash
+      working-directory: ./scion
+      run: echo "git-hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+      shell: bash
+    - name: Try to restore cached SCION binaries
+      id: cache-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: ${{ inputs.scion-bin-path }}
+        key: scion-${{ runner.os }}-${{ runner.arch }}-${{ steps.git-hash.outputs.git-hash }}
+
     - name: Install SCION
       working-directory: ./scion
       run: |
@@ -19,6 +51,7 @@ runs:
         ./scion.sh bazel-remote
         make
       shell: bash
+      if: steps.cache-restore.outputs.cache-hit != 'true'
     - name: Generate and run local topology
       id: local-topology
       working-directory: ./scion
