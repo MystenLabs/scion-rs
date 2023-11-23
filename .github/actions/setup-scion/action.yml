@@ -1,0 +1,36 @@
+name: Setup SCION
+description: Setup SCION and run local topology and verify that it works
+outputs:
+  daemon-address-as111:
+    description: The address (including port) of AS 1-ff00:0:112
+    value: "${{ steps.local-topology.outputs.daemon-address-as111 }}"
+
+runs:
+  using: composite
+  steps:
+    - name: Clone SCION repository
+      run: git clone https://github.com/scionproto/scion
+      shell: bash
+    - name: Install SCION
+      working-directory: ./scion
+      run: |
+        ./tools/install_bazel
+        ./tools/install_deps
+        ./scion.sh bazel-remote
+        make
+      shell: bash
+    - name: Generate and run local topology
+      id: local-topology
+      working-directory: ./scion
+      run: |
+        ./scion.sh topology -c topology/tiny.topo
+        ./scion.sh run
+        echo "daemon-address-as111=$(./scion.sh sciond-addr 111)" >> $GITHUB_OUTPUT
+      shell: bash
+    - name: Verify that topology runs correctly
+      working-directory: ./scion
+      run: |
+        sleep 10s
+        bin/end2end_integration
+        bin/scion showpaths --sciond ${{ steps.local-topology.outputs.daemon-address-as111 }} 1-ff00:0:112
+      shell: bash
