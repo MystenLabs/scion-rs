@@ -103,9 +103,17 @@ jobs:
           save-if: "false"
       - run: sudo apt-get install protobuf-compiler
       - run: cargo install cargo-tarpaulin@0.27.1
+      - name: Install SCION and run local topology
+        uses: "./.github/actions/setup-scion"
+        id: scion
 
-      - name: Run tests and record coverage
-        run: cargo tarpaulin --workspace --skip-clean --all-targets --doc --out html --out xml --exclude-files "crates/scion-grpc/*"
+      - name: Run tests (including integration tests) and record coverage
+        run: >
+          DAEMON_ADDRESS=${{ steps.scion.outputs.daemon-address-as111 }}
+          cargo tarpaulin --workspace --skip-clean --all-targets --doc
+          --out html --out xml
+          --exclude-files "crates/scion-grpc/*"
+          -- --include-ignored
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v3
