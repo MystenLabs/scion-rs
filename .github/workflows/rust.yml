@@ -113,6 +113,7 @@ jobs:
           cargo tarpaulin --workspace --skip-clean --all-targets --doc
           --out html --out xml
           --exclude-files "crates/scion-grpc/*"
+          --exclude-files "crates/**/tests/*"
           -- --include-ignored
 
       - name: Upload coverage report
