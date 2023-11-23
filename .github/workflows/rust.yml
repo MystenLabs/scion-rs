@@ -138,6 +138,13 @@ jobs:
         with:
           path: code-coverage-results.md
 
+      - name: Cache SCION binaries
+        if: ${{ github.ref == 'refs/heads/main' && steps.scion.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v3
+        with:
+          path: ${{ steps.scion.outputs.scion-bin-path }}
+          key: ${{ steps.scion.outputs.cache-primary-key }}
+
   lint:
     name: Lint Rust code
     needs: diff
