@@ -1,4 +1,4 @@
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::NonZeroU64;
 
 use chrono::{DateTime, Duration, Utc};
 use scion_grpc::daemon::v1 as daemon_grpc;
@@ -46,9 +46,8 @@ pub struct PathMetadata {
     /// AS.
     /// Consequently, there are no entries for the first and last ASes, as these
     /// are not traversed completely by the path.
-    // Question(mlegner): Maybe a value of 0 would make sense as well? But then we
-    // cannot distinguish between unset values and an explicit 0.
-    pub internal_hops: Option<Vec<Option<NonZeroU32>>>,
+    /// One cannot distinguish between unset values and an explicit 0.
+    pub internal_hops: Option<Vec<u32>>,
     /// Notes added by ASes on the path, in the order of occurrence.
     /// Entry i is the note of AS i on the path.
     pub notes: Option<Vec<String>>,
@@ -136,12 +135,8 @@ impl TryFrom<daemon_grpc::Path> for PathMetadata {
                 .collect()
         );
 
-        let internal_hops = some_if_length_matches!(
-            (grpc_path.internal_hops, expected_count_links_intra) =>
-                into_iter()
-                .map(NonZeroU32::new)
-                .collect()
-        );
+        let internal_hops =
+            some_if_length_matches!(grpc_path.internal_hops, expected_count_links_intra);
 
         let notes = some_if_length_matches!(grpc_path.notes, expected_count_ases);
 
@@ -301,8 +296,8 @@ mod tests {
                     });
                     4
                 ]),
-                link_type: Some(vec![LinkType::Parent, LinkType::Core]),
-                internal_hops: Some(vec![NonZeroU32::new(1)]),
+                link_type: Some(vec![LinkType::MultiHop, LinkType::Direct]),
+                internal_hops: Some(vec![1]),
                 notes: Some(vec!["AS1".into(), "AS2".into(), "AS3".into()]),
                 epic_auths: Some(EpicAuths {
                     phvf: Bytes::from_static(&[0; 24]),
@@ -342,7 +337,7 @@ mod tests {
                 bandwidth_kbps: Some(vec![None; 3]),
                 geo: Some(vec![None; 4]),
                 link_type: Some(vec![LinkType::Unset, LinkType::Invalid]),
-                internal_hops: Some(vec![None]),
+                internal_hops: Some(vec![0]),
                 ..PathMetadata::default()
             })
         )
