@@ -22,6 +22,14 @@ pub enum SocketAddr {
 }
 
 impl SocketAddr {
+    /// Construct a new SCION socket address from an ISD-AS number and standard rust socket address.
+    pub const fn from_std(isd_asn: IsdAsn, address: std::net::SocketAddr) -> Self {
+        match address {
+            std::net::SocketAddr::V4(addr) => SocketAddr::V4(SocketAddrV4::from_std(isd_asn, addr)),
+            std::net::SocketAddr::V6(addr) => SocketAddr::V6(SocketAddrV6::from_std(isd_asn, addr)),
+        }
+    }
+
     /// Returns the host address associated with this socket address.
     pub const fn host(&self) -> Host {
         match self {
@@ -200,6 +208,18 @@ socket_address! {
     pub struct SocketAddrV4 {ip: Ipv4Addr, kind: AddressKind::SocketV4, setter: set_ip};
 }
 
+impl SocketAddrV4 {
+    /// Construct a new SCION v4 socket address from an ISD-AS number and standard
+    /// rust socket address.
+    pub const fn from_std(isd_asn: IsdAsn, socket_address: std::net::SocketAddrV4) -> Self {
+        Self {
+            isd_asn,
+            ip: *socket_address.ip(),
+            port: socket_address.port(),
+        }
+    }
+}
+
 socket_address! {
     /// A SCION IPv6 socket address.
     ///
@@ -208,6 +228,18 @@ socket_address! {
     ///
     /// See [`SocketAddr`] for a type encompassing IPv6, IPv6, and Service socket addresses.
     pub struct SocketAddrV6 {ip: Ipv6Addr, kind: AddressKind::SocketV6, setter: set_ip};
+}
+
+impl SocketAddrV6 {
+    /// Construct a new SCION v4 socket address from an ISD-AS number and standard
+    /// rust socket address.
+    pub const fn from_std(isd_asn: IsdAsn, socket_address: std::net::SocketAddrV6) -> Self {
+        Self {
+            isd_asn,
+            ip: *socket_address.ip(),
+            port: socket_address.port(),
+        }
+    }
 }
 
 socket_address! {

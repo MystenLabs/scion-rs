@@ -5,11 +5,12 @@ use bytes::Bytes;
 mod common_header;
 pub use common_header::DecodeError;
 
-mod relay_protocol;
-pub use relay_protocol::{ReceiveError, ReliableRelayProtocol, SendError};
-
 mod parser;
+pub use parser::StreamParser;
+
 mod registration;
+pub use registration::{InvalidRegistrationAddressError, RegistrationError, RegistrationExchange};
+
 mod wire_utils;
 
 const ADDRESS_TYPE_OCTETS: usize = 1;
@@ -21,5 +22,5 @@ pub struct Packet {
     /// sending host if it is located in the same AS.
     pub last_host: Option<SocketAddr>,
     /// The content of the single packet as a sequence of Bytes objects.
-    pub content: Vec<Bytes>,
+    pub content: Bytes,
 }

@@ -28,9 +28,8 @@ use bytes::{Buf, BufMut};
 
 use super::wire_utils::LAYER4_PORT_OCTETS;
 use crate::{
-    address::{HostAddress, IsdAsn, ServiceAddress},
+    address::{HostAddress, IsdAsn, ServiceAddress, SocketAddr as ScionSocketAddr},
     reliable::{
-        common_header::CommonHeader,
         wire_utils::{encoded_address_and_port_length, encoded_address_length},
         ADDRESS_TYPE_OCTETS,
     },
@@ -68,13 +67,10 @@ impl RegistrationRequest {
     }
 
     /// Add the provided associated service address to the request.
+    #[cfg(test)]
     pub fn with_associated_service(mut self, address: ServiceAddress) -> Self {
         self.associated_service = Some(address);
         self
-    }
-
-    pub fn encoded_length(&self) -> usize {
-        CommonHeader::MIN_LENGTH + self.encoded_request_length()
     }
 
     /// Encode a registration request to the provided buffer.
@@ -83,11 +79,6 @@ impl RegistrationRequest {
     ///
     /// Panics if there is not enough space in the buffer to encode the request.
     pub fn encode_to(&self, buffer: &mut impl BufMut) {
-        self.encode_common_header(buffer);
-        self.encode_request(buffer);
-    }
-
-    fn encode_request(&self, buffer: &mut impl BufMut) {
         let initial_remaining = buffer.remaining_mut();
 
         const UDP_PROTOCOL_NUMBER: u8 = 17;
@@ -108,16 +99,6 @@ impl RegistrationRequest {
 
         let written = initial_remaining - buffer.remaining_mut();
         assert_eq!(written, self.encoded_request_length());
-    }
-
-    #[inline]
-    fn encode_common_header(&self, buffer: &mut impl BufMut) {
-        CommonHeader {
-            destination: None,
-            payload_length: u32::try_from(self.encoded_request_length())
-                .expect("requests are short"),
-        }
-        .encode_to(buffer);
     }
 
     #[inline]
@@ -182,9 +163,170 @@ fn encode_address(buffer: &mut impl BufMut, address: &SocketAddr) {
     }
 }
 
+/// Error returned when attempting to to register to a service address.
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("cannot register to the provided address type")]
+pub struct InvalidRegistrationAddressError;
+
+/// Errors indicating a failure in the registration protocol.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, thiserror::Error)]
+pub enum RegistrationError {
+    #[error("invalid response length")]
+    InvalidResponseLength,
+    #[error("dispatcher assigned incorrect port")]
+    PortMismatch { requested: u16, assigned: u16 },
+}
+
+/// A simple state machine for handling the registration to the dispatcher.
+///
+/// The methods [`RegistrationExchange::register()`] and [`RegistrationExchange::response()`]
+/// are used to initiate the registration and handle registration response respectively.
+#[derive(Debug, Default)]
+pub struct RegistrationExchange {
+    request: Option<RegistrationRequest>,
+}
+
+impl RegistrationExchange {
+    /// Creates a new instance of the state machine.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Register to receive SCION packets destined for the given address and port.
+    ///
+    /// The registration request to be sent to the dispatcher over a Unix socket is
+    /// written into the provided buffer.
+    ///
+    /// Specify a port number of zero to allow the dispatcher to assign the port number.
+    ///
+    /// Returns an error if an attempt is made to register to a service address.
+    pub fn register<T: BufMut>(
+        &mut self,
+        address: ScionSocketAddr,
+        buffer: &mut T,
+    ) -> Result<(), InvalidRegistrationAddressError> {
+        assert!(self.request.is_none());
+
+        let public_address: SocketAddr = match address {
+            ScionSocketAddr::V4(addr) => {
+                std::net::SocketAddrV4::new(*addr.ip(), addr.port()).into()
+            }
+            ScionSocketAddr::V6(addr) => {
+                std::net::SocketAddrV6::new(*addr.ip(), addr.port(), 0, 0).into()
+            }
+            ScionSocketAddr::Svc(_) => return Err(InvalidRegistrationAddressError),
+        };
+
+        let request = RegistrationRequest::new(address.isd_asn(), public_address);
+        request.encode_to(buffer);
+        self.request = Some(request);
+
+        Ok(())
+    }
+
+    /// Handle the response from the dispatcher and returns the registered address.
+    ///
+    /// Returns an error if the response cannot be decoded or if the dispatcher has deviated
+    /// from the expected protocol.
+    pub fn handle_response(
+        &mut self,
+        mut response: &[u8],
+    ) -> Result<ScionSocketAddr, RegistrationError> {
+        assert!(self.request.is_some());
+
+        if response.len() != RegistrationResponse::ENCODED_LENGTH {
+            return Err(RegistrationError::InvalidResponseLength);
+        }
+        let response = RegistrationResponse::decode(&mut response).unwrap();
+
+        let request = self.request.take().unwrap();
+
+        let requested_port = request.public_address.port();
+        if requested_port != 0 && requested_port != response.assigned_port {
+            Err(RegistrationError::PortMismatch {
+                requested: requested_port,
+                assigned: response.assigned_port,
+            })
+        } else {
+            let mut socket_addr =
+                ScionSocketAddr::from_std(request.isd_asn, request.public_address);
+            socket_addr.set_port(response.assigned_port);
+
+            Ok(socket_addr)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    mod exchange {
+        use bytes::BytesMut;
+
+        use super::*;
+        use crate::test_utils::parse;
+
+        #[test]
+        fn success() -> TestResult {
+            let mut buffer = BytesMut::new();
+            let address: ScionSocketAddr = parse!("[1-ff00:0:1,10.2.3.4]:80");
+
+            let mut exchange = RegistrationExchange::new();
+
+            exchange.register(address, &mut buffer)?;
+            assert_eq!(
+                buffer,
+                [0x03, 17, 0, 1, 0xff, 0, 0, 0, 0, 0x01, 0, 80, 1, 10, 2, 3, 4].as_slice()
+            );
+
+            let bound_address = exchange.handle_response(&[0, 80])?;
+            assert_eq!(address, bound_address);
+
+            Ok(())
+        }
+
+        #[test]
+        fn port_mismatch() -> TestResult {
+            let mut buffer = BytesMut::new();
+            let address: ScionSocketAddr = parse!("[1-ff00:0:1,10.2.3.4]:80");
+
+            let mut exchange = RegistrationExchange::new();
+            exchange.register(address, &mut buffer)?;
+            let err = exchange.handle_response(&[0, 81]).expect_err("should fail");
+
+            assert_eq!(
+                err,
+                RegistrationError::PortMismatch {
+                    requested: 80,
+                    assigned: 81
+                }
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn invalid_response_length() -> TestResult {
+            let mut buffer = BytesMut::new();
+            let address: ScionSocketAddr = parse!("[1-ff00:0:1,10.2.3.4]:80");
+
+            let mut exchange = RegistrationExchange::new();
+            exchange.register(address, &mut buffer)?;
+
+            let err = exchange.handle_response(&[80]).expect_err("should fail");
+            assert_eq!(err, RegistrationError::InvalidResponseLength);
+
+            let err = exchange
+                .handle_response(&[0, 80, 99])
+                .expect_err("should fail");
+            assert_eq!(err, RegistrationError::InvalidResponseLength);
+
+            Ok(())
+        }
+    }
 
     mod encode {
         use super::*;
@@ -199,7 +341,7 @@ mod tests {
                     let mut backing_array = [0u8; BUFFER_LENGTH];
                     let mut buffer = backing_array.as_mut_slice();
 
-                    $request.encode_request(&mut buffer);
+                    $request.encode_to(&mut buffer);
 
                     let bytes_written = BUFFER_LENGTH - buffer.remaining_mut();
                     assert_eq!(backing_array[..bytes_written], $expected);
