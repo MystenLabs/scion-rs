@@ -30,6 +30,16 @@ impl SocketAddr {
         }
     }
 
+    /// Returns a [`std::net::SocketAddr`] corresponding to the AS-local portion of the address,
+    /// if it is not a service address.
+    pub const fn local_address(&self) -> Option<std::net::SocketAddr> {
+        match self {
+            SocketAddr::V4(addr) => Some(std::net::SocketAddr::V4(addr.local_address())),
+            SocketAddr::V6(addr) => Some(std::net::SocketAddr::V6(addr.local_address())),
+            SocketAddr::Svc(_) => None,
+        }
+    }
+
     /// Returns the host address associated with this socket address.
     pub const fn host(&self) -> Host {
         match self {
@@ -218,6 +228,11 @@ impl SocketAddrV4 {
             port: socket_address.port(),
         }
     }
+
+    /// Returns a [`std::net::SocketAddrV4`] corresponding to the AS-local portion of the address.
+    pub const fn local_address(&self) -> std::net::SocketAddrV4 {
+        std::net::SocketAddrV4::new(*self.ip(), self.port())
+    }
 }
 
 socket_address! {
@@ -239,6 +254,11 @@ impl SocketAddrV6 {
             ip: *socket_address.ip(),
             port: socket_address.port(),
         }
+    }
+
+    /// Returns a [`std::net::SocketAddrV6`] corresponding to the AS-local portion of the address.
+    pub const fn local_address(&self) -> std::net::SocketAddrV6 {
+        std::net::SocketAddrV6::new(*self.ip(), self.port(), 0, 0)
     }
 }
 

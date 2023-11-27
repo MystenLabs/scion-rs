@@ -164,7 +164,7 @@ fn encode_address(buffer: &mut impl BufMut, address: &SocketAddr) {
 }
 
 /// Error returned when attempting to to register to a service address.
-#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[derive(Debug, Clone, Copy, thiserror::Error, PartialEq, Eq)]
 #[error("cannot register to the provided address type")]
 pub struct InvalidRegistrationAddressError;
 
@@ -207,15 +207,13 @@ impl RegistrationExchange {
     ) -> Result<(), InvalidRegistrationAddressError> {
         assert!(self.request.is_none());
 
-        let public_address: SocketAddr = match address {
-            ScionSocketAddr::V4(addr) => {
-                std::net::SocketAddrV4::new(*addr.ip(), addr.port()).into()
-            }
-            ScionSocketAddr::V6(addr) => {
-                std::net::SocketAddrV6::new(*addr.ip(), addr.port(), 0, 0).into()
-            }
-            ScionSocketAddr::Svc(_) => return Err(InvalidRegistrationAddressError),
-        };
+        if address.isd_asn().is_wildcard() {
+            return Err(InvalidRegistrationAddressError);
+        }
+
+        let public_address: SocketAddr = address
+            .local_address()
+            .ok_or(InvalidRegistrationAddressError)?;
 
         let request = RegistrationRequest::new(address.isd_asn(), public_address);
         request.encode_to(buffer);
@@ -287,6 +285,32 @@ mod tests {
 
             Ok(())
         }
+
+        macro_rules! invalid_address {
+            ($name:ident, $addr_str:expr) => {
+                #[test]
+                fn $name() -> TestResult {
+                    let mut backing_array = [0u8; 10];
+                    let mut buffer = backing_array.as_mut_slice();
+
+                    let address: ScionSocketAddr = parse!($addr_str);
+                    let mut exchange = RegistrationExchange::new();
+
+                    let err = exchange
+                        .register(address, &mut buffer)
+                        .expect_err("should fail");
+
+                    assert_eq!(err, InvalidRegistrationAddressError);
+
+                    Ok(())
+                }
+            };
+        }
+
+        invalid_address!(zero_isd_fails, "[0-ff00:0:1,10.2.3.4]:80");
+        invalid_address!(zero_asn_fails, "[1-0,10.2.3.4]:80");
+        invalid_address!(zero_isd_asn_fails, "[0-0,10.2.3.4]:80");
+        invalid_address!(service_address_fails, "[1-ff00:0:1,CS]:80");
 
         #[test]
         fn port_mismatch() -> TestResult {

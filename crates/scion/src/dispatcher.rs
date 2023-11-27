@@ -22,18 +22,22 @@ const BUFFER_LENGTH: usize = 1024 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RegistrationError {
-    // TODO(jsmith): Write an integration test for address not supported
-    #[error(transparent)]
-    AddressNotSupported(#[from] InvalidRegistrationAddressError),
+    #[error("an invalid registration address was provided")]
+    InvalidAddress,
     #[error(transparent)]
     RegistrationExchangeFailed(#[from] ProtocolRegistrationError),
     #[error(transparent)]
     InvalidResponse(#[from] DecodeError),
-    // TODO(jsmith): Write an integration test for when the address is already in use.
     #[error("the dispatcher refused to bind to the requested address")]
-    AddressInUse,
+    Refused,
     #[error(transparent)]
     Io(#[from] io::Error),
+}
+
+impl From<InvalidRegistrationAddressError> for RegistrationError {
+    fn from(_: InvalidRegistrationAddressError) -> Self {
+        Self::InvalidAddress
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -63,8 +67,10 @@ pub struct DispatcherStream {
 
 impl DispatcherStream {
     /// Connects to the dispatcher over a Unix socket at the provided path.
-    pub async fn connect<P: AsRef<Path>>(path: P) -> Result<Self, io::Error> {
+    pub async fn connect<P: AsRef<Path> + std::fmt::Debug>(path: P) -> Result<Self, io::Error> {
+        tracing::trace!(?path, "connecting to dispatcher");
         let inner = UnixStream::connect(path).await?;
+        tracing::trace!("successfully connected");
 
         Ok(Self {
             inner,
@@ -76,6 +82,7 @@ impl DispatcherStream {
 
     /// Register to receive SCION packet for the given address and port.
     pub async fn register(&mut self, address: SocketAddr) -> Result<SocketAddr, RegistrationError> {
+        tracing::trace!(%address, "registering to receive SCION packets");
         let mut exchange = RegistrationExchange::new();
 
         debug_assert!(self.send_buffer.is_empty());
@@ -93,23 +100,18 @@ impl DispatcherStream {
 
         if let Err(err) = self.send_via(None, &mut buffer).await {
             match err {
-                SendError::PayloadTooLarge(_) => unreachable!(),
                 SendError::Io(err) => return Err(err.into()),
+                SendError::PayloadTooLarge(_) => unreachable!(),
             }
         }
 
-        let packet = match self.receive_packet().await {
-            Ok(packet) => packet,
-            Err(err) => match err {
-                ReceiveError::Io(err) => match err.kind() {
-                    // TODO(jsmith): One of these should be mapped to AddressInUse
-                    io::ErrorKind::ConnectionReset => todo!(),
-                    io::ErrorKind::ConnectionAborted => todo!(),
-                    _ => return Err(err.into()),
-                },
-                ReceiveError::Decode(err) => return Err(err.into()),
-            },
-        };
+        let packet = self.receive_packet().await.map_err(|err| match err {
+            ReceiveError::Decode(err) => RegistrationError::InvalidResponse(err),
+            ReceiveError::Io(err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                RegistrationError::Refused
+            }
+            ReceiveError::Io(err) => RegistrationError::Io(err),
+        })?;
 
         Ok(exchange.handle_response(&packet.content)?)
     }
@@ -119,6 +121,7 @@ impl DispatcherStream {
         relay: Option<std::net::SocketAddr>,
         data: &mut impl Buf,
     ) -> Result<(), SendError> {
+        tracing::trace!(?relay, "sending {} bytes", data.remaining());
         let header = CommonHeader {
             destination: relay,
             payload_length: u32::try_from(data.remaining())
