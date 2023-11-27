@@ -34,6 +34,7 @@ impl StreamParser {
         Ok(())
     }
 
+    /// Parses data that is available in the buffer and returns the parsed Packet.
     pub fn parse(&mut self, data: &mut BytesMut) -> Result<Option<Packet>, DecodeError> {
         self.try_decode_header(data)?;
 
