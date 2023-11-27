@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 #[non_exhaustive]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 /// Error kinds for dataplane paths.
 pub enum DataplanePathErrorKind {
     InvalidSegmentLengths,

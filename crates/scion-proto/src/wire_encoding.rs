@@ -32,6 +32,19 @@ pub trait WireDecodeWithContext<T>: Sized {
     fn decode_with_context(data: &mut T, context: Self::Context) -> Result<Self, Self::Error>;
 }
 
+pub trait WireEncode {
+    /// The error type returned on a failed encode.
+    type Error: std::fmt::Debug;
+
+    fn encode_to<T: BufMut>(&self, buffer: &mut T) -> Result<(), Self::Error>;
+
+    fn encode_to_bytes(&self) -> Bytes {
+        let mut buffer = BytesMut::new();
+        self.encode_to(&mut buffer).unwrap(); // BytesMut will grow as needed
+        buffer.freeze()
+    }
+}
+
 /// An enum that stores the undecoded bytes of a field.
 ///
 /// When presented with a typed, encoded, representation of a header field, this library may
@@ -43,6 +56,18 @@ pub enum MaybeEncoded<T, U> {
     Decoded(T),
     /// The data associated with an instance that cannot currently be decoded by the library.
     Encoded(U),
+}
+
+impl<T, U> MaybeEncoded<T, U>
+where
+    T: Into<U>,
+{
+    pub fn into_encoded(self) -> U {
+        match self {
+            MaybeEncoded::Decoded(decoded) => decoded.into(),
+            MaybeEncoded::Encoded(encoded) => encoded,
+        }
+    }
 }
 
 macro_rules! bounded_uint {
@@ -89,3 +114,4 @@ macro_rules! bounded_uint {
     };
 }
 pub(crate) use bounded_uint;
+use bytes::{BufMut, Bytes, BytesMut};
