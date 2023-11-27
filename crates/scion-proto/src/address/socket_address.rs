@@ -41,6 +41,15 @@ impl SocketAddr {
         matches!(*self, Self::Svc(_))
     }
 
+    /// Returns the ISD-AS number associated with this socket address.
+    pub const fn isd_asn(&self) -> IsdAsn {
+        match self {
+            Self::V4(addr) => addr.isd_asn(),
+            Self::V6(addr) => addr.isd_asn(),
+            Self::Svc(addr) => addr.isd_asn(),
+        }
+    }
+
     /// Returns the port number associated with this socket address.
     pub const fn port(&self) -> u16 {
         match self {
