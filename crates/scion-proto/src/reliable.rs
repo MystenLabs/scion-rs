@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use bytes::Bytes;
 
 mod common_header;
-pub use common_header::DecodeError;
+pub use common_header::{CommonHeader, DecodeError, DecodedHeader, PartialHeader};
 
 mod parser;
 pub use parser::StreamParser;
