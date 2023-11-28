@@ -1,11 +1,11 @@
 use std::num::NonZeroU8;
 
-use bytes::Buf;
+use bytes::{Buf, BufMut};
 
-use super::{path_header::PathType, ByEndpoint, DecodeError};
+use super::{path_header::PathType, ByEndpoint, DecodeError, InadequateBufferSize};
 use crate::{
     address::HostType,
-    wire_encoding::{self, MaybeEncoded, WireDecode},
+    wire_encoding::{self, MaybeEncoded, WireDecode, WireEncode},
 };
 
 /// SCION packet common header.
@@ -172,6 +172,12 @@ impl From<AddressInfo> for u8 {
     }
 }
 
+impl From<ByEndpoint<AddressInfo>> for u8 {
+    fn from(value: ByEndpoint<AddressInfo>) -> Self {
+        value.destination.get() << 4 | value.source.get()
+    }
+}
+
 impl<T> WireDecode<T> for CommonHeader
 where
     T: Buf,
@@ -230,6 +236,30 @@ where
     }
 }
 
+impl WireEncode for CommonHeader {
+    type Error = InadequateBufferSize;
+
+    fn encode_to<T: BufMut>(&self, buffer: &mut T) -> Result<(), Self::Error> {
+        if buffer.remaining_mut() < Self::LENGTH {
+            return Err(InadequateBufferSize);
+        }
+
+        buffer.put_u32(
+            (self.version.get() as u32) << 28
+                | (self.traffic_class as u32) << 20
+                | self.flow_id.get(),
+        );
+        buffer.put_u8(self.next_header);
+        buffer.put_u8(self.header_length_factor.get());
+        buffer.put_u16(self.payload_length);
+        buffer.put_u8(self.path_type.into_encoded());
+        buffer.put_u8(self.address_info.into());
+        buffer.put_u16(self.reserved);
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,70 +286,130 @@ mod tests {
         (data, header)
     }
 
-    #[test]
-    fn valid_ipv4_to_ipv4() {
-        let (data, expected) = base_header();
+    mod encode {
+        use super::*;
 
-        let decoded = CommonHeader::decode(&mut data.as_slice()).expect("must successfully decode");
+        #[test]
+        fn valid_ipv4_to_ipv4() {
+            let (expected_encoded, header) = base_header();
 
-        assert_eq!(decoded, expected);
-        assert_eq!(decoded.header_length(), 36);
-    }
+            assert_eq!(header.encode_to_bytes().as_ref(), expected_encoded);
+        }
 
-    #[test]
-    fn valid_svc_to_ipv6() {
-        let (mut data, expected) = base_header();
+        #[test]
+        fn valid_svc_to_ipv6() {
+            let (mut expected_encoded, header) = base_header();
 
-        data[9] = 0x34;
-
-        assert_eq!(
-            CommonHeader::decode(&mut data.as_slice()).expect("must successfully decode"),
-            CommonHeader {
+            let header = CommonHeader {
                 address_info: ByEndpoint {
                     destination: AddressInfo::from_host_type(HostType::Ipv6).unwrap(),
                     source: AddressInfo::from_host_type(HostType::Svc).unwrap(),
                 },
-                ..expected
-            }
-        );
-    }
+                ..header
+            };
+            expected_encoded[9] = 0x34;
 
-    #[test]
-    fn valid_unknown_path_type() {
-        let (mut data, expected) = base_header();
-        data[8] = 0x05;
+            assert_eq!(header.encode_to_bytes().as_ref(), expected_encoded);
+        }
 
-        assert_eq!(
-            CommonHeader::decode(&mut data.as_slice()).expect("must successfully decode"),
-            CommonHeader {
+        #[test]
+        fn valid_unknown_path_type() {
+            let (mut expected_encoded, header) = base_header();
+
+            let header = CommonHeader {
                 path_type: MaybeEncoded::Encoded(5),
-                ..expected
-            }
-        );
+                ..header
+            };
+            expected_encoded[8] = 0x05;
+
+            assert_eq!(header.encode_to_bytes().as_ref(), expected_encoded);
+        }
+
+        #[test]
+        fn inadequate_buffer_size() {
+            let (_, header) = base_header();
+
+            let mut buffer = [0u8; CommonHeader::LENGTH - 1];
+            let result = header.encode_to(&mut buffer.as_mut());
+
+            assert_eq!(result, Err(InadequateBufferSize));
+
+            let mut buffer = [0u8; CommonHeader::LENGTH];
+            let result = header.encode_to(&mut buffer.as_mut());
+
+            assert_eq!(result, Ok(()));
+        }
     }
 
-    #[test]
-    fn unsupported_version() {
-        let (mut data, _) = base_header();
+    mod decode {
+        use super::*;
 
-        // Unset and reset the version
-        data[0] = (data[0] & 0b0000_1111) | 0b0001_0000;
+        #[test]
+        fn valid_ipv4_to_ipv4() {
+            let (data, expected) = base_header();
 
-        assert_eq!(
-            CommonHeader::decode(&mut data.as_slice()).expect_err("must fail to decode"),
-            DecodeError::UnsupportedVersion(Version(1))
-        );
-    }
+            let decoded =
+                CommonHeader::decode(&mut data.as_slice()).expect("must successfully decode");
 
-    #[test]
-    fn invalid_header_length() {
-        let (mut data, _) = base_header();
-        data[5] = 0x08;
+            assert_eq!(decoded, expected);
+            assert_eq!(decoded.header_length(), 36);
+        }
 
-        assert_eq!(
-            CommonHeader::decode(&mut data.as_slice()).expect_err("must fail to decode"),
-            DecodeError::InvalidHeaderLength(8)
-        );
+        #[test]
+        fn valid_svc_to_ipv6() {
+            let (mut data, expected) = base_header();
+
+            data[9] = 0x34;
+
+            assert_eq!(
+                CommonHeader::decode(&mut data.as_slice()).expect("must successfully decode"),
+                CommonHeader {
+                    address_info: ByEndpoint {
+                        destination: AddressInfo::from_host_type(HostType::Ipv6).unwrap(),
+                        source: AddressInfo::from_host_type(HostType::Svc).unwrap(),
+                    },
+                    ..expected
+                }
+            );
+        }
+
+        #[test]
+        fn valid_unknown_path_type() {
+            let (mut data, expected) = base_header();
+            data[8] = 0x05;
+
+            assert_eq!(
+                CommonHeader::decode(&mut data.as_slice()).expect("must successfully decode"),
+                CommonHeader {
+                    path_type: MaybeEncoded::Encoded(5),
+                    ..expected
+                }
+            );
+        }
+
+        #[test]
+        fn unsupported_version() {
+            let (mut data, _) = base_header();
+
+            // Unset and reset the version
+            data[0] = (data[0] & 0b0000_1111) | 0b0001_0000;
+
+            assert_eq!(
+                CommonHeader::decode(&mut data.as_slice()).expect_err("must fail to decode"),
+                DecodeError::UnsupportedVersion(Version(1))
+            );
+        }
+
+        #[test]
+        fn invalid_header_length() {
+            let (mut data, _) = base_header();
+            data[5] = 0x08;
+
+            assert_eq!(
+                CommonHeader::decode(&mut data.as_slice()).expect_err("must fail to decode"),
+                DecodeError::InvalidHeaderLength(8)
+            );
+        }
     }
 
     mod flow_id {

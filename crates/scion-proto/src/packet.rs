@@ -32,13 +32,13 @@ pub struct ByEndpoint<T> {
 #[allow(unused)]
 pub struct ScionPacket {
     /// Metadata about the remaining headers and payload.
-    common_header: CommonHeader,
+    pub common_header: CommonHeader,
     /// Source and destination addresses.
-    address_header: AddressHeader,
+    pub address_header: AddressHeader,
     /// The path to the destination, when necessary.
-    path_header: Option<PathHeader>,
+    pub path_header: Option<PathHeader>,
     /// The packet payload.
-    payload: Bytes,
+    pub payload: Bytes,
 }
 
 impl<T> WireDecode<T> for ScionPacket
@@ -81,7 +81,7 @@ where
 }
 
 /// Errors raised when failing to decode a [`ScionPacket`] or its constituents.
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
 pub enum DecodeError {
     #[error("cannot decode packet with unsupported header version {0:?}")]
     UnsupportedVersion(Version),
@@ -100,3 +100,12 @@ impl From<DataplanePathErrorKind> for DecodeError {
         Self::InvalidPath(value)
     }
 }
+
+/// Raised if there nt enough available in the capacity for encoding the SCION headers.
+///
+/// As the headers can a maximum of 1020 bytes in length, it is advisable to have attempted
+/// least that amount of remaining space for encoding a [`ScionPacket`] (the payload is not
+/// written to the buffer).
+#[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
+#[error("the provided buffer did not have sufficient size")]
+pub struct InadequateBufferSize;

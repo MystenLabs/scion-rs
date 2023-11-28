@@ -24,14 +24,24 @@ pub enum DecodeError {
 
 /// Partial or fully decoded commonHeader
 #[derive(Debug)]
-pub(super) enum DecodedHeader {
+pub enum DecodedHeader {
     Partial(PartialHeader),
     Full(CommonHeader),
 }
 
+impl DecodedHeader {
+    pub(super) fn take_full(self) -> CommonHeader {
+        if let Self::Full(header) = self {
+            header
+        } else {
+            panic!("attempt to take fully decoded header from DecodedHeader::Partial");
+        }
+    }
+}
+
 /// A partially decoded common header
 #[derive(Copy, Clone, Debug)]
-pub(super) struct PartialHeader {
+pub struct PartialHeader {
     pub host_type: HostType,
     pub payload_length: u32,
 }
@@ -104,7 +114,7 @@ impl PartialHeader {
 
 /// The header for packets exchange between the client and relay.
 #[derive(Default, Debug, Copy, Clone)]
-pub(super) struct CommonHeader {
+pub struct CommonHeader {
     /// The destination to which to relay the packet (when sent), or the last hop
     /// when receiving.
     pub destination: Option<SocketAddr>,
