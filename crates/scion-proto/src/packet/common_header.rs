@@ -172,6 +172,12 @@ impl From<AddressInfo> for u8 {
     }
 }
 
+impl From<ByEndpoint<AddressInfo>> for u8 {
+    fn from(value: ByEndpoint<AddressInfo>) -> Self {
+        value.destination.get() << 4 | value.source.get()
+    }
+}
+
 impl<T> WireDecode<T> for CommonHeader
 where
     T: Buf,
@@ -247,7 +253,7 @@ impl WireEncode for CommonHeader {
         buffer.put_u8(self.header_length_factor.get());
         buffer.put_u16(self.payload_length);
         buffer.put_u8(self.path_type.into_encoded());
-        buffer.put_u8((self.address_info.destination.get() << 4) | self.address_info.source.get());
+        buffer.put_u8(self.address_info.into());
         buffer.put_u16(self.reserved);
 
         Ok(())

@@ -101,6 +101,11 @@ impl From<DataplanePathErrorKind> for DecodeError {
     }
 }
 
+/// Raised if there nt enough available in the capacity for encoding the SCION headers.
+///
+/// As the headers can a maximum of 1020 bytes in length, it is advisable to have attempted
+/// least that amount of remaining space for encoding a [`ScionPacket`] (the payload is not
+/// written to the buffer).
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
 #[error("the provided buffer did not have sufficient size")]
 pub struct InadequateBufferSize;

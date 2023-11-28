@@ -18,8 +18,6 @@ impl StreamParser {
     }
 
     /// Decode and store the next partial or common header available from the data.
-    ///
-    /// Returns true if a full header is available.
     fn try_decode_header(&mut self, data: &mut BytesMut) -> Result<(), DecodeError> {
         match self.header {
             None if data.remaining() >= CommonHeader::MIN_LENGTH => {

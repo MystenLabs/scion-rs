@@ -246,7 +246,7 @@ socket_address! {
 }
 
 impl SocketAddrV6 {
-    /// Construct a new SCION v4 socket address from an ISD-AS number and standard
+    /// Construct a new SCION v6 socket address from an ISD-AS number and standard
     /// rust socket address.
     pub const fn from_std(isd_asn: IsdAsn, socket_address: std::net::SocketAddrV6) -> Self {
         Self {

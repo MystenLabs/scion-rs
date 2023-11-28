@@ -163,7 +163,7 @@ fn encode_address(buffer: &mut impl BufMut, address: &SocketAddr) {
     }
 }
 
-/// Error returned when attempting to to register to a service address.
+/// Error returned when attempting to register to a service address.
 #[derive(Debug, Clone, Copy, thiserror::Error, PartialEq, Eq)]
 #[error("cannot register to the provided address type")]
 pub struct InvalidRegistrationAddressError;
@@ -179,7 +179,7 @@ pub enum RegistrationError {
 
 /// A simple state machine for handling the registration to the dispatcher.
 ///
-/// The methods [`RegistrationExchange::register()`] and [`RegistrationExchange::response()`]
+/// The methods [`RegistrationExchange::register()`] and [`RegistrationExchange::handle_response()`]
 /// are used to initiate the registration and handle registration response respectively.
 #[derive(Debug, Default)]
 pub struct RegistrationExchange {
@@ -195,17 +195,24 @@ impl RegistrationExchange {
     /// Register to receive SCION packets destined for the given address and port.
     ///
     /// The registration request to be sent to the dispatcher over a Unix socket is
-    /// written into the provided buffer.
+    /// written into the provided buffer and the number of bytes written are returned.
     ///
     /// Specify a port number of zero to allow the dispatcher to assign the port number.
     ///
-    /// Returns an error if an attempt is made to register to a service address.
+    /// # Errors
+    ///
+    /// Returns an error if an attempt is made to register to a service address, or if
+    /// the address has a wildcard ISD-AS number.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called repeatedly before a call to [`Self::handle_response()`]
     pub fn register<T: BufMut>(
         &mut self,
         address: ScionSocketAddr,
         buffer: &mut T,
-    ) -> Result<(), InvalidRegistrationAddressError> {
-        assert!(self.request.is_none());
+    ) -> Result<usize, InvalidRegistrationAddressError> {
+        assert!(self.request.is_none(), "register called repeatedly");
 
         if address.isd_asn().is_wildcard() {
             return Err(InvalidRegistrationAddressError);
@@ -216,13 +223,16 @@ impl RegistrationExchange {
             .ok_or(InvalidRegistrationAddressError)?;
 
         let request = RegistrationRequest::new(address.isd_asn(), public_address);
+        let encoded_length = request.encoded_request_length();
+
         request.encode_to(buffer);
         self.request = Some(request);
 
-        Ok(())
+        Ok(encoded_length)
     }
 
-    /// Handle the response from the dispatcher and returns the registered address.
+    /// Handle the response from the dispatcher for the most recent call to [`Self::register()`],
+    /// and returns the registered address.
     ///
     /// Returns an error if the response cannot be decoded or if the dispatcher has deviated
     /// from the expected protocol.

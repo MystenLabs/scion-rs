@@ -21,6 +21,6 @@ pub struct Packet {
     /// The last AS-level host the packet traversed, such as the ingress border router or the
     /// sending host if it is located in the same AS.
     pub last_host: Option<SocketAddr>,
-    /// The content of the single packet as a sequence of Bytes objects.
+    /// The content of the packet.
     pub content: Bytes,
 }

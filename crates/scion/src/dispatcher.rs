@@ -1,6 +1,6 @@
 use std::{io, path::Path};
 
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BytesMut};
 use scion_proto::{
     address::SocketAddr,
     reliable::{
@@ -18,7 +18,13 @@ use tokio::{
     net::UnixStream,
 };
 
-const BUFFER_LENGTH: usize = 1024 * 1024;
+// Recv buffer to 1 MiB
+// TODO(jsmith): Allow the user to set this
+const RECV_BUFFER_LEN: usize = 1024 * 1024; // 1 MiB;
+
+// Set the send buffer to 1024 bytes since only single common headers (max ~32 B) are written to it.
+// This means that the logic for resetting the BytesMut is triggered only once every ~30 packets.
+const SEND_BUFFER_LEN: usize = 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RegistrationError {
@@ -74,8 +80,8 @@ impl DispatcherStream {
 
         Ok(Self {
             inner,
-            send_buffer: BytesMut::with_capacity(BUFFER_LENGTH),
-            recv_buffer: BytesMut::with_capacity(BUFFER_LENGTH),
+            send_buffer: BytesMut::with_capacity(SEND_BUFFER_LEN),
+            recv_buffer: BytesMut::with_capacity(RECV_BUFFER_LEN),
             parser: StreamParser::new(),
         })
     }
@@ -88,17 +94,10 @@ impl DispatcherStream {
         debug_assert!(self.send_buffer.is_empty());
 
         // Known to hold all registration messages
-        let mut registration_message = [0u8; 64];
+        let mut buffer = [0u8; 64];
+        let message_length = exchange.register(address, &mut buffer.as_mut())?;
 
-        // Write the registraton message to the buffer
-        let mut buffer = registration_message.as_mut_slice();
-        exchange.register(address, &mut buffer)?;
-        let bytes_remaining = buffer.remaining_mut();
-
-        let message_length = registration_message.len() - bytes_remaining;
-        let mut buffer = &registration_message[..message_length];
-
-        if let Err(err) = self.send_via(None, &mut buffer).await {
+        if let Err(err) = self.send_via(None, &mut &buffer[..message_length]).await {
             match err {
                 SendError::Io(err) => return Err(err.into()),
                 SendError::PayloadTooLarge(_) => unreachable!(),

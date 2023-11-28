@@ -1,3 +1,5 @@
+use bytes::{BufMut, Bytes, BytesMut};
+
 /// A trait for types decodable from a wire format, without any additional information.
 pub trait WireDecode<T>: Sized {
     /// The error type returned on a failed decode.
@@ -114,4 +116,3 @@ macro_rules! bounded_uint {
     };
 }
 pub(crate) use bounded_uint;
-use bytes::{BufMut, Bytes, BytesMut};
