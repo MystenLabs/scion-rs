@@ -64,6 +64,68 @@ can run tests like this:
 DAEMON_ADDRESS="http://192.168.0.42:12345" cargo test -- --ignored
 ```
 
+### Local SCION topology with multipass
+
+If you are on a [supported Linux distribution](https://docs.scion.org/en/latest/dev/setup.html#prerequisites) you can
+set up a [local SCION development environment](https://docs.scion.org/en/latest/dev/setup.html) directly on your machine
+and [run a local SCION topology](https://docs.scion.org/en/latest/dev/run.html).
+
+If you run a different operating system, you can conveniently manage Ubuntu VMs with
+[Multipass](https://multipass.run/install). The following commands can be used to launch a new VM, install prerequisites
+inside the VM, install the latest version of SCION, and run a local topology with services accessible from the host
+machine.
+
+```sh
+# set up VM
+# if you have sufficient resources on the host, you may want to increase the VM's resources
+multipass launch --disk 10G --memory 4G --cpus 2 --name scion
+multipass shell scion
+
+# install prerequisites
+sudo apt-get update
+sudo apt-get install make python3-pip ca-certificates curl gnupg
+
+# set up Docker
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER
+exit
+
+# download and install SCION
+multipass shell scion
+git clone https://github.com/scionproto/scion
+cd scion
+./tools/install_bazel
+./tools/install_deps
+./scion.sh bazel-remote
+export PATH=/home/ubuntu/.local/bin/:$PATH
+make build
+
+# run local topology and check that it works
+./scion.sh topology -c topology/tiny.topo
+./scion.sh run
+sleep 5
+bin/scion showpaths --sciond $(./scion.sh sciond-addr 111) 1-ff00:0:112
+
+# make SCION applications of AS 1-ffaa:0:111 available on host
+EXTERNAL_ADDRESS=$(ip route get 9.9.9.9 | sed 's/.*src \([^ ]*\).*/\1/;t;d')
+DAEMON_ADDRESS_111=$(cat gen/sciond_addresses.json | jq -r '."1-ff00:0:111"')
+echo "net.ipv4.conf.all.route_localnet = 1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl --system
+sudo iptables -t nat -I PREROUTING -d $EXTERNAL_ADDRESS -p tcp --match multiport --dports 30000:32000 -j DNAT --to $DAEMON_ADDRESS_111
+sudo apt-get install iptables-persistent
+
+# get sciond address to set on host
+echo export DAEMON_ADDRESS=$(./scion.sh sciond-addr 111 | sed "s/$DAEMON_ADDRESS_111/$EXTERNAL_ADDRESS/")
+```
+
 ## Signed commits
 
 We appreciate it if you configure Git to [sign your commits](https://gist.github.com/troyfontaine/18c9146295168ee9ca2b30c00bd1b41e).
