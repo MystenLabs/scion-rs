@@ -62,7 +62,7 @@ repos:
   - id: deny
     name: cargo-deny
     entry: cargo deny
+    files: Cargo.(lock|toml)
     args: ["--all-features", "check"]
     language: rust
-    types: [rust]
     pass_filenames: false

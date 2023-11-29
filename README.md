@@ -47,3 +47,8 @@ export RUST_LOG=info
 
 We use the protobuf definitions and other specification from [scionproto/scion](https://github.com/scionproto/scion) and
 the [SCION documentation](https://docs.scion.org).
+
+## License
+
+This project is licensed under the Apache License, Version 2.0 ([LICENSE](LICENSE) or
+<https://www.apache.org/licenses/LICENSE-2.0>).
