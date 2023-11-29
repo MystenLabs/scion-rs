@@ -16,6 +16,7 @@ use super::{error::AddressKind, AddressParseError, Host, HostAddress, HostType};
 /// both represent the anycast service address ServiceAddress::CONTROL. The
 /// corresponding multicast service address would be CS_M.
 #[derive(Eq, PartialEq, Copy, Clone, Debug, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
 pub struct ServiceAddress(pub u16);
 
 impl ServiceAddress {

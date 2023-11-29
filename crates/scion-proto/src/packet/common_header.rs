@@ -35,7 +35,7 @@ pub struct CommonHeader {
 
     /// Next layer SCION protocol number.
     ///
-    /// See the IETF SCION-dataplane RFC draft][rfc] for possible values.
+    /// See the [IETF SCION-dataplane RFC draft][rfc] for possible values.
     ///
     ///[rfc]: https://www.ietf.org/archive/id/draft-dekater-scion-dataplane-00.html#protnum
     pub next_header: u8,
