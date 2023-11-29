@@ -31,6 +31,11 @@ runs:
         --depth 1
         --branch ${{ inputs.scion-ref }}
       shell: bash
+    - name: Install SCION dependencies
+      working-directory: ./scion
+      run: |
+        ./tools/install_deps
+      shell: bash
     - name: Get Git commit hash
       id: git-hash
       working-directory: ./scion
@@ -43,15 +48,15 @@ runs:
         path: ${{ inputs.scion-bin-path }}
         key: scion-${{ runner.os }}-${{ runner.arch }}-${{ steps.git-hash.outputs.git-hash }}
 
-    - name: Install SCION
+    - name: Build SCION
       working-directory: ./scion
       run: |
         ./tools/install_bazel
-        ./tools/install_deps
         ./scion.sh bazel-remote
         make
       shell: bash
       if: steps.cache-restore.outputs.cache-hit != 'true'
+
     - name: Generate and run local topology
       id: local-topology
       working-directory: ./scion
