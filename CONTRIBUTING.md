@@ -58,10 +58,16 @@ You can run the full test suite (including integration tests) by executing `carg
 
 Some integration tests allow you to control addresses of SCION components and other data through environment variables.
 For example, if your SCION Daemon is accessible at `192.168.0.42:12345` instead of the default `localhost:30255`, you
-can run tests like this:
+can run integration tests like this:
 
 ```sh
 DAEMON_ADDRESS="http://192.168.0.42:12345" cargo test -- --ignored
+```
+
+To run both unit and integration tests, run
+
+```sh
+cargo test -- --include-ignored
 ```
 
 ### Local SCION topology with multipass
@@ -76,9 +82,15 @@ inside the VM, install the latest version of SCION, and run a local topology wit
 machine.
 
 ```sh
-# set up VM
+# set up VM and enable direct SSH access
 # if you have sufficient resources on the host, you may want to increase the VM's resources
-multipass launch --disk 10G --memory 4G --cpus 2 --name scion
+multipass launch --disk 10G --memory 4G --cpus 2 --name scion --cloud-init - <<EOF
+users:
+- name: username
+  sudo: ALL=(ALL) NOPASSWD:ALL
+  ssh_authorized_keys:
+  - $( cat ~/.ssh/id*.pub )
+EOF
 multipass shell scion
 
 # install prerequisites
@@ -121,9 +133,14 @@ echo "net.ipv4.conf.all.route_localnet = 1" | sudo tee -a /etc/sysctl.conf
 sudo sysctl --system
 sudo iptables -t nat -I PREROUTING -d $EXTERNAL_ADDRESS -p tcp --match multiport --dports 30000:32000 -j DNAT --to $DAEMON_ADDRESS_111
 sudo apt-get install iptables-persistent
+```
 
-# get sciond address to set on host
-echo export DAEMON_ADDRESS=$(./scion.sh sciond-addr 111 | sed "s/$DAEMON_ADDRESS_111/$EXTERNAL_ADDRESS/")
+Now you can access SCION services from the host system and forward the dispatcher UNIX socket to run integration tests.
+For convenience, you can use the [test_setup.sh](./test_setup.sh) script:
+
+```sh
+. ./test_setup.sh
+cargo test -- --ignored
 ```
 
 ## Signed commits
