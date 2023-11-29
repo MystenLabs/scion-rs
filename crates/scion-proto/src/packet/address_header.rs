@@ -1,11 +1,11 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use bytes::Buf;
+use bytes::{Buf, BufMut};
 
-use super::{AddressInfo, ByEndpoint, DecodeError};
+use super::{AddressInfo, ByEndpoint, DecodeError, InadequateBufferSize};
 use crate::{
     address::{Host, HostType, IsdAsn, ServiceAddress},
-    wire_encoding::{MaybeEncoded, WireDecodeWithContext},
+    wire_encoding::{MaybeEncoded, WireDecodeWithContext, WireEncode},
 };
 
 /// The bytes of an encoded host address.
@@ -22,7 +22,7 @@ pub struct AddressHeader {
     /// The ISD-AS numbers of the source and destination hosts.
     pub ia: ByEndpoint<IsdAsn>,
     /// The host addresses of the source and destination.
-    pub host: ByEndpoint<MaybeEncoded<Host, RawHostAddress>>,
+    pub host: ByEndpoint<MaybeEncoded<Host, (AddressInfo, RawHostAddress)>>,
 }
 
 impl<T> WireDecodeWithContext<T> for AddressHeader
@@ -53,10 +53,55 @@ where
     }
 }
 
+impl WireEncode for AddressHeader {
+    type Error = InadequateBufferSize;
+
+    fn encode_to<T: BufMut>(&self, buffer: &mut T) -> Result<(), Self::Error> {
+        if buffer.remaining_mut() < std::mem::size_of::<u64>() * 2 {
+            return Err(InadequateBufferSize);
+        }
+        buffer.put_u64(self.ia.destination.into());
+        buffer.put_u64(self.ia.source.into());
+
+        encode_host(self.host.destination, buffer)?;
+        encode_host(self.host.source, buffer)
+    }
+}
+
+fn encode_host(
+    host: MaybeEncoded<Host, (AddressInfo, RawHostAddress)>,
+    buffer: &mut impl BufMut,
+) -> Result<(), InadequateBufferSize> {
+    match host {
+        MaybeEncoded::Decoded(host_addr) => {
+            if buffer.remaining_mut() < AddressInfo::for_host(&host_addr).address_length() {
+                return Err(InadequateBufferSize);
+            }
+
+            match host_addr {
+                Host::Ip(std::net::IpAddr::V4(addr)) => buffer.put_slice(&addr.octets()),
+                Host::Ip(std::net::IpAddr::V6(addr)) => buffer.put_slice(&addr.octets()),
+                Host::Svc(addr) => {
+                    buffer.put_u16(addr.into());
+                    buffer.put_u16(0);
+                }
+            }
+        }
+        MaybeEncoded::Encoded((addr_info, encoded_host)) => {
+            if buffer.remaining_mut() < addr_info.address_length() {
+                return Err(InadequateBufferSize);
+            }
+            buffer.put_slice(&encoded_host[..addr_info.address_length()]);
+        }
+    }
+
+    Ok(())
+}
+
 fn maybe_decode_host<T>(
     data: &mut T,
     info: AddressInfo,
-) -> Result<MaybeEncoded<Host, RawHostAddress>, DecodeError>
+) -> Result<MaybeEncoded<Host, (AddressInfo, RawHostAddress)>, DecodeError>
 where
     T: Buf,
 {
@@ -83,7 +128,7 @@ where
             assert!(info.address_length() <= AddressInfo::MAX_ADDRESS_BYTES);
             data.copy_to_slice(&mut host_address[..info.address_length()]);
 
-            MaybeEncoded::Encoded(host_address)
+            MaybeEncoded::Encoded((info, host_address))
         }
     })
 }
@@ -92,150 +137,137 @@ where
 mod tests {
     use super::*;
 
-    mod decode {
-        use bytes::{BufMut, BytesMut};
+    macro_rules! address_info {
+        (host $dest_host:expr) => {
+            AddressInfo::for_host(&$dest_host)
+        };
+        (raw $dest_host:expr) => {
+            $dest_host.1
+        };
+    }
 
-        use super::*;
-        use crate::test_utils::parse;
+    macro_rules! to_encoded {
+        (host $dest_host:expr) => {
+            MaybeEncoded::Decoded($dest_host)
+        };
+        (raw $dest_host:expr) => {{
+            let mut buffer = RawHostAddress::default();
+            buffer[..$dest_host.0.len()].clone_from_slice(&$dest_host.0);
+            MaybeEncoded::Encoded(($dest_host.1, buffer))
+        }};
+    }
 
-        #[test]
-        fn ipv4_to_ipv4() {
-            let destination: IsdAsn = parse!("1-ff00:0:ab");
-            let source: IsdAsn = parse!("1-ff00:0:cd");
+    macro_rules! test_encode_decode {
+        (
+            name: $name:ident,
+            destination: {ia: $dst_ia:expr, $dst_type:tt: $dst_host:expr},
+            source: {ia: $src_ia:expr, $src_type:tt: $src_host:expr},
+            encoded: $encoded:expr
+        ) => {
+            test_encode_decode!(
+                $name,
+                ($dst_ia, to_encoded!($dst_type $dst_host), address_info!($dst_type $dst_host)),
+                ($src_ia, to_encoded!($src_type $src_host), address_info!($src_type $src_host)),
+                $encoded
+            );
+        };
+        (
+            $name:ident,
+            ($dst_ia:expr, $dst_host:expr, $dst_info:expr),
+            ($src_ia:expr, $src_host:expr, $src_info:expr),
+            $encoded:expr
+        ) => {
+            mod $name {
+                use super::{ByEndpoint, *};
 
-            let mut data = BytesMut::new();
+                #[test]
+                fn decode() -> Result<(), Box<dyn std::error::Error>> {
+                    let expected_addresses = AddressHeader {
+                        ia: ByEndpoint { destination: $dst_ia.parse()?, source: $src_ia.parse()? },
+                        host: ByEndpoint { destination: $dst_host, source: $src_host },
+                    };
 
-            data.put_u64(destination.as_u64());
-            data.put_u64(source.as_u64());
-            data.put_slice(&[10, 0, 0, 1, 192, 168, 0, 1]);
+                    let mut data: &'static [u8] = $encoded;
+                    let addresses = AddressHeader::decode_with_context(
+                        &mut data,
+                        ByEndpoint { destination: $dst_info, source: $src_info }
+                    )?;
 
-            let mut data = data.freeze();
-
-            let result = AddressHeader::decode_with_context(
-                &mut data,
-                ByEndpoint {
-                    destination: AddressInfo::IPV4,
-                    source: AddressInfo::IPV4,
-                },
-            )
-            .expect("should successfully decode");
-
-            assert_eq!(
-                result,
-                AddressHeader {
-                    ia: ByEndpoint {
-                        destination,
-                        source
-                    },
-                    host: ByEndpoint {
-                        destination: MaybeEncoded::Decoded(Ipv4Addr::new(10, 0, 0, 1).into()),
-                        source: MaybeEncoded::Decoded(Ipv4Addr::new(192, 168, 0, 1).into()),
-                    }
+                    assert_eq!(addresses, expected_addresses);
+                    Ok(())
                 }
-            );
-            assert_eq!(data.remaining(), 0);
-        }
 
-        #[test]
-        fn ipv6_to_service() {
-            let destination: IsdAsn = parse!("31-ff00:96:0");
-            let source: IsdAsn = parse!("47-ff13:0:cd");
-            let ipv6_source: Ipv6Addr = parse!("2001:0db8:ac10:fe01::");
-            let service_destination = ServiceAddress::DAEMON.multicast();
+                #[test]
+                fn encode() -> Result<(), Box<dyn std::error::Error>> {
+                    let header = AddressHeader {
+                        ia: ByEndpoint { destination: $dst_ia.parse()?, source: $src_ia.parse()? },
+                        host: ByEndpoint { destination: $dst_host, source: $src_host },
+                    };
+                    let expected_encoded: &'static [u8] = $encoded;
 
-            let mut data = BytesMut::new();
+                    let encoded = header.encode_to_bytes();
 
-            data.put_u64(destination.as_u64());
-            data.put_u64(source.as_u64());
-            data.put_u16(service_destination.into());
-            data.put_u16(0);
-            data.put_slice(&ipv6_source.octets());
-
-            let mut data = data.freeze();
-
-            let result = AddressHeader::decode_with_context(
-                &mut data,
-                ByEndpoint {
-                    destination: AddressInfo::SERVICE,
-                    source: AddressInfo::IPV6,
-                },
-            )
-            .expect("should successfully decode");
-
-            assert_eq!(
-                result,
-                AddressHeader {
-                    ia: ByEndpoint {
-                        destination,
-                        source
-                    },
-                    host: ByEndpoint {
-                        destination: MaybeEncoded::Decoded(service_destination.into()),
-                        source: MaybeEncoded::Decoded(ipv6_source.into()),
-                    }
+                    assert_eq!(encoded.as_ref(), expected_encoded);
+                    Ok(())
                 }
-            );
-            assert_eq!(data.remaining(), 0);
-        }
+            }
+        };
+    }
 
-        #[test]
-        fn unknown_to_unknown() {
-            let destination: IsdAsn = parse!("31-ff00:96:0");
-            let source: IsdAsn = parse!("47-ff13:0:cd");
-            let destination_host = [1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-            let source_host = [8u8, 7, 6, 5, 4, 3, 2, 1];
+    test_encode_decode! {
+        name: ipv4_to_ipv4,
+        destination: {ia: "1-ff00:0:ab", host: Host::Ip("10.0.0.1".parse()?)},
+        source: {ia: "1-ff00:0:cd", host: Host::Ip("192.168.0.1".parse()?)},
+        encoded: &[
+            0, 1, 0xff, 0, 0, 0, 0, 0xab,
+            0, 1, 0xff, 0, 0, 0, 0, 0xcd,
+            10, 0, 0, 1, 192, 168, 0, 1
+        ]
+    }
 
-            let mut data = BytesMut::new();
+    test_encode_decode! {
+        name: ipv6_to_service,
+        destination: {ia: "31-ff00:96:0", host: Host::Svc(ServiceAddress::DAEMON.multicast())},
+        source: {ia: "47-ff13:0:cd", host: Host::Ip("2001:0db8:ac10:fe01::".parse()?)},
+        encoded: &[
+            0, 31, 0xff, 0, 0, 0x96, 0, 0,
+            0, 47, 0xff, 0x13, 0, 0, 0, 0xcd,
+            0x80, 0x01, 0, 0,
+            0x20, 0x01, 0x0d, 0xb8, 0xac, 0x10,
+            0xfe, 0x01, 0, 0, 0, 0, 0, 0, 0, 0
+        ]
+    }
 
-            data.put_u64(destination.as_u64());
-            data.put_u64(source.as_u64());
-            data.put_slice(&destination_host);
-            data.put_slice(&source_host);
+    test_encode_decode! {
+        name: unknown_to_unknown,
+        destination: {
+            ia: "31-ff00:96:0",
+            raw: ([1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], AddressInfo::new_unchecked(0b0110))
+        },
+        source: {
+            ia: "47-ff13:0:cd",
+            raw: ([8u8, 7, 6, 5, 4, 3, 2, 1], AddressInfo::new_unchecked(0b1001))
+        },
+        encoded: &[
+            0, 31, 0xff, 0, 0, 0x96, 0, 0,
+            0, 47, 0xff, 0x13, 0, 0, 0, 0xcd,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+            8, 7, 6, 5, 4, 3, 2, 1
+        ]
+    }
 
-            let mut data = data.freeze();
+    #[test]
+    fn truncated_decode() {
+        let data = [0u8; 19];
 
-            let result = AddressHeader::decode_with_context(
-                &mut data,
-                ByEndpoint {
-                    source: AddressInfo::new(0b1001).unwrap(),
-                    destination: AddressInfo::new(0b0110).unwrap(),
-                },
-            )
-            .expect("should successfully decode");
+        let result = AddressHeader::decode_with_context(
+            &mut data.as_slice(),
+            ByEndpoint {
+                destination: AddressInfo::SERVICE,
+                source: AddressInfo::IPV6,
+            },
+        );
 
-            assert_eq!(
-                result,
-                AddressHeader {
-                    ia: ByEndpoint {
-                        destination,
-                        source
-                    },
-                    host: ByEndpoint {
-                        destination: MaybeEncoded::Encoded([
-                            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 0
-                        ]),
-                        source: MaybeEncoded::Encoded([
-                            8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0
-                        ]),
-                    }
-                }
-            );
-            assert_eq!(data.remaining(), 0);
-        }
-
-        #[test]
-        fn truncated() {
-            let data = [0u8; 19];
-
-            let result = AddressHeader::decode_with_context(
-                &mut data.as_slice(),
-                ByEndpoint {
-                    destination: AddressInfo::SERVICE,
-                    source: AddressInfo::IPV6,
-                },
-            );
-
-            assert_eq!(result, Err(DecodeError::PacketEmptyOrTruncated));
-        }
+        assert_eq!(result, Err(DecodeError::PacketEmptyOrTruncated));
     }
 }

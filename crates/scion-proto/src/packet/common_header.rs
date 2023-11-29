@@ -4,7 +4,7 @@ use bytes::{Buf, BufMut};
 
 use super::{path_header::PathType, ByEndpoint, DecodeError, InadequateBufferSize};
 use crate::{
-    address::HostType,
+    address::{Host, HostType},
     wire_encoding::{self, MaybeEncoded, WireDecode, WireEncode},
 };
 
@@ -143,6 +143,15 @@ impl AddressInfo {
             HostType::Ipv4 => Some(Self(0b0000)),
             HostType::Ipv6 => Some(Self(0b0011)),
             HostType::Svc => Some(Self(0b0100)),
+        }
+    }
+
+    /// Returns an address info for the provided host address.
+    pub fn for_host(host: &Host) -> Self {
+        match host {
+            Host::Ip(std::net::IpAddr::V4(_)) => Self::IPV4,
+            Host::Ip(std::net::IpAddr::V6(_)) => Self::IPV6,
+            Host::Svc(_) => Self::SERVICE,
         }
     }
 
