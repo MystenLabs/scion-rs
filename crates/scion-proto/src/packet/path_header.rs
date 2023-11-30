@@ -66,6 +66,19 @@ pub enum DataplanePath {
     Unsupported { path_type: PathType, bytes: Bytes },
 }
 
+impl DataplanePath {
+    pub fn deep_copy(&self) -> Self {
+        match self {
+            Self::EmptyPath => Self::EmptyPath,
+            Self::Standard(path) => Self::Standard(path.deep_copy()),
+            Self::Unsupported { path_type, bytes } => Self::Unsupported {
+                path_type: *path_type,
+                bytes: Bytes::copy_from_slice(bytes),
+            },
+        }
+    }
+}
+
 impl From<StandardPath> for DataplanePath {
     fn from(value: StandardPath) -> Self {
         DataplanePath::Standard(value)

@@ -195,6 +195,13 @@ impl StandardPath {
     pub fn meta_header(&self) -> &PathMetaHeader {
         &self.meta_header
     }
+
+    pub fn deep_copy(&self) -> Self {
+        Self {
+            meta_header: self.meta_header.clone(),
+            encoded_path: Bytes::copy_from_slice(&self.encoded_path),
+        }
+    }
 }
 
 impl WireDecode<Bytes> for StandardPath {
