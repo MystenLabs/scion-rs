@@ -29,7 +29,7 @@ pub struct Path {
     /// The raw bytes to be added as the path header to SCION dataplane packets
     dataplane_path: DataplanePath,
     /// The underlay address (IP + port) of the next hop; i.e., the local border router
-    underlay_next_hop: SocketAddr,
+    underlay_next_hop: Option<SocketAddr>,
     /// The ISD-ASN where the path starts and ends
     pub isd_asn: ByEndpoint<IsdAsn>,
     /// Path metadata
@@ -37,6 +37,19 @@ pub struct Path {
 }
 
 impl Path {
+    pub fn new(
+        dataplane_path: DataplanePath,
+        isd_asn: ByEndpoint<IsdAsn>,
+        underlay_next_hop: Option<SocketAddr>,
+    ) -> Self {
+        Self {
+            dataplane_path,
+            underlay_next_hop,
+            isd_asn,
+            metadata: None,
+        }
+    }
+
     #[tracing::instrument]
     pub fn try_from_grpc_with_endpoints(
         mut value: daemon_grpc::Path,
@@ -56,8 +69,11 @@ impl Path {
             }) => address
                 .parse()
                 .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidInterface))?,
+            // TODO: Determine if the daemon returns paths that are strictly on the host.
+            // If so, this is only an error if the path is non-empty
             _ => return Err(PathParseErrorKind::NoInterface.into()),
         };
+        let underlay_next_hop = Some(underlay_next_hop);
 
         let metadata = PathMetadata::try_from(value)
             .map_err(|e| {
@@ -93,7 +109,7 @@ mod tests {
         )
         .expect("conversion should succeed");
         assert_eq!(
-            path.underlay_next_hop,
+            path.underlay_next_hop.unwrap(),
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 42)
         );
         assert_eq!(

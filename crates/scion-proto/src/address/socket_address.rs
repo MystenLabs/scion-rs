@@ -22,6 +22,17 @@ pub enum SocketAddr {
 }
 
 impl SocketAddr {
+    /// Creates a new SCION socket address from an ISD-AS number, SCION host, and port.
+    pub const fn new(isd_asn: IsdAsn, host: Host, port: u16) -> Self {
+        match host {
+            Host::Ip(ip_host) => match ip_host {
+                IpAddr::V4(ip) => SocketAddr::V4(SocketAddrV4::new(isd_asn, ip, port)),
+                IpAddr::V6(ip) => SocketAddr::V6(SocketAddrV6::new(isd_asn, ip, port)),
+            },
+            Host::Svc(service) => SocketAddr::Svc(SocketAddrSvc::new(isd_asn, service, port)),
+        }
+    }
+
     /// Construct a new SCION socket address from an ISD-AS number and standard rust socket address.
     pub const fn from_std(isd_asn: IsdAsn, address: std::net::SocketAddr) -> Self {
         match address {
