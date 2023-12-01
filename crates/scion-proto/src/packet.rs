@@ -4,7 +4,6 @@
 //! format, and errors encountered while decoding the packet.
 //!
 //! For paths useable in a SCION packet, see the [path module][`crate::path`].
-
 use bytes::{Buf, Bytes};
 
 use crate::{
