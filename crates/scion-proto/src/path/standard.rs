@@ -5,7 +5,7 @@ use bytes::{Buf, Bytes};
 use super::DataplanePathErrorKind;
 use crate::{
     packet::DecodeError,
-    wire_encoding::{self, WireDecode, WireDecodeWithContext},
+    wire_encoding::{self, WireDecode},
 };
 
 wire_encoding::bounded_uint! {
@@ -125,8 +125,8 @@ impl<T: Buf> WireDecode<T> for PathMetaHeader {
         if data.remaining() < mem::size_of::<u32>() {
             return Err(Self::Error::PacketEmptyOrTruncated);
         }
-
         let fields = data.get_u32();
+
         let meta = Self {
             current_info_field: InfoFieldIndex(nth_field::<0>(fields)),
             current_hop_field: HopFieldIndex(nth_field::<1>(fields)),
@@ -195,41 +195,24 @@ impl StandardPath {
     pub fn meta_header(&self) -> &PathMetaHeader {
         &self.meta_header
     }
-
-    #[inline]
-    pub fn decode_from_buffer<T>(mut buffer: T) -> Result<Self, DecodeError>
-    where
-        T: Buf,
-    {
-        let length = buffer.remaining();
-        Self::decode_with_context(&mut buffer, length)
-    }
 }
 
-impl<T> WireDecodeWithContext<T> for StandardPath
-where
-    T: Buf,
-{
+impl WireDecode<Bytes> for StandardPath {
     type Error = DecodeError;
-    type Context = usize;
 
-    fn decode_with_context(data: &mut T, path_length: usize) -> Result<Self, Self::Error> {
-        if data.remaining() < path_length {
-            return Err(DecodeError::PacketEmptyOrTruncated);
-        }
-
-        let encoded_path = data.copy_to_bytes(path_length);
-        let mut view: &[u8] = encoded_path.as_ref();
+    fn decode(data: &mut Bytes) -> Result<Self, Self::Error> {
+        let mut view: &[u8] = data.as_ref();
         let meta_header = PathMetaHeader::decode(&mut view)?;
 
-        if encoded_path.len() != meta_header.encoded_path_length() {
-            return Err(DecodeError::PacketEmptyOrTruncated);
+        if data.remaining() < meta_header.encoded_path_length() {
+            Err(Self::Error::PacketEmptyOrTruncated)
+        } else {
+            let encoded_path = data.split_to(meta_header.encoded_path_length());
+            Ok(Self {
+                meta_header,
+                encoded_path,
+            })
         }
-
-        Ok(Self {
-            meta_header,
-            encoded_path,
-        })
     }
 }
 
@@ -250,7 +233,7 @@ mod tests {
 
             let mut data = vec![7u8; $field_len + PathMetaHeader::LENGTH];
             data.as_mut_slice().put_u32(meta_bytes);
-            data
+            Bytes::from(data)
         }};
         (info: $info:expr, hop: $hop:expr, seg_lengths: $segs:expr) => {
             path_bytes! {
@@ -265,9 +248,8 @@ mod tests {
 
     #[test]
     fn valid_no_zero_index() {
-        let data = path_bytes! {info: 0, hop: 0, seg_lengths: [3, 0, 0], field_len: 44};
-        let header =
-            StandardPath::decode_with_context(&mut data.as_slice(), 48).expect("valid decode");
+        let mut data = path_bytes! {info: 0, hop: 0, seg_lengths: [3, 0, 0], field_len: 44};
+        let header = StandardPath::decode(&mut data).expect("valid decode");
 
         assert_eq!(
             *header.meta_header(),
@@ -282,8 +264,8 @@ mod tests {
 
     #[test]
     fn valid_minimal() {
-        let data = path_bytes! {info: 0, hop: 0, seg_lengths: [1, 0, 0]};
-        let header = StandardPath::decode_from_buffer(&mut data.as_slice()).expect("valid decode");
+        let mut data = path_bytes! {info: 0, hop: 0, seg_lengths: [1, 0, 0]};
+        let header = StandardPath::decode(&mut data).expect("valid decode");
 
         assert_eq!(
             *header.meta_header(),
@@ -298,9 +280,8 @@ mod tests {
 
     #[test]
     fn valid_with_index() {
-        let data = path_bytes! {info: 1, hop: 8, seg_lengths: [5, 4, 0], field_len: 124};
-        let header =
-            StandardPath::decode_with_context(&mut data.as_slice(), 128).expect("valid decode");
+        let mut data = path_bytes! {info: 1, hop: 8, seg_lengths: [5, 4, 0], field_len: 124};
+        let header = StandardPath::decode(&mut data).expect("valid decode");
 
         assert_eq!(
             *header.meta_header(),
@@ -317,10 +298,9 @@ mod tests {
         ($name:ident, $path:expr, $err:expr) => {
             #[test]
             fn $name() {
-                let data = $path;
+                let mut data = $path;
                 let expected_err: DecodeError = $err.into();
-                let err = StandardPath::decode_with_context(&mut data.as_slice(), data.len())
-                    .expect_err("should fail");
+                let err = StandardPath::decode(&mut data).expect_err("should fail");
                 assert_eq!(expected_err, err);
             }
         };

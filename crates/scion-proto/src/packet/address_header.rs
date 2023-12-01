@@ -25,10 +25,7 @@ pub struct AddressHeader {
     pub host: ByEndpoint<MaybeEncoded<Host, (AddressInfo, RawHostAddress)>>,
 }
 
-impl<T> WireDecodeWithContext<T> for AddressHeader
-where
-    T: Buf,
-{
+impl<T: Buf> WireDecodeWithContext<T> for AddressHeader {
     type Error = DecodeError;
     type Context = ByEndpoint<AddressInfo>;
 

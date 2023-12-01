@@ -3,7 +3,7 @@ use bytes::{Buf, Bytes};
 use super::DecodeError;
 use crate::{
     path::standard::StandardPath,
-    wire_encoding::{MaybeEncoded, WireDecodeWithContext},
+    wire_encoding::{WireDecode, WireDecodeWithContext},
 };
 
 /// SCION path types that may be encountered in a packet
@@ -12,7 +12,7 @@ use crate::{
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum PathType {
     /// The empty path type.
-    Empty = 0,
+    Empty,
     /// The standard SCION path type.
     Scion,
     /// One-hop paths between neighbouring border routers.
@@ -21,34 +21,32 @@ pub enum PathType {
     Epic,
     /// Experimental Colibri path type.
     Colibri,
+    /// Other, unrecognised path types
+    Other(u8),
 }
 
 impl From<PathType> for u8 {
     fn from(value: PathType) -> Self {
-        value as u8
-    }
-}
-
-impl TryFrom<u8> for PathType {
-    type Error = UnsupportedPathType;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(Self::Empty),
-            1 => Ok(Self::Scion),
-            2 => Ok(Self::OneHop),
-            3 => Ok(Self::Epic),
-            4 => Ok(Self::Colibri),
-            _ => Err(UnsupportedPathType(value)),
+            PathType::Empty => 0,
+            PathType::Scion => 1,
+            PathType::OneHop => 2,
+            PathType::Epic => 3,
+            PathType::Colibri => 4,
+            PathType::Other(value) => value,
         }
     }
 }
 
-impl From<u8> for MaybeEncoded<PathType, u8> {
+impl From<u8> for PathType {
     fn from(value: u8) -> Self {
-        match PathType::try_from(value) {
-            Ok(path_type) => MaybeEncoded::Decoded(path_type),
-            Err(UnsupportedPathType(raw)) => MaybeEncoded::Encoded(raw),
+        match value {
+            0 => Self::Empty,
+            1 => Self::Scion,
+            2 => Self::OneHop,
+            3 => Self::Epic,
+            4 => Self::Colibri,
+            value => Self::Other(value),
         }
     }
 }
@@ -57,43 +55,43 @@ impl From<u8> for MaybeEncoded<PathType, u8> {
 #[error("unsupported path type {0}")]
 pub struct UnsupportedPathType(pub u8);
 
-/// Path header found in a SCION packet
-pub enum PathHeader {
+/// Dataplane path found in a SCION packet
+#[derive(Debug, Clone, PartialEq)]
+pub enum DataplanePath {
+    /// The empty path type, used for intra-AS hops
+    EmptyPath,
     /// The standard SCION path header.
     Standard(StandardPath),
     /// The raw bytes of an unsupported path header type.
-    Unsupported(Bytes),
+    Unsupported { path_type: PathType, bytes: Bytes },
 }
 
-impl From<StandardPath> for PathHeader {
+impl From<StandardPath> for DataplanePath {
     fn from(value: StandardPath) -> Self {
-        PathHeader::Standard(value)
+        DataplanePath::Standard(value)
     }
 }
 
-impl<T> WireDecodeWithContext<T> for PathHeader
-where
-    T: Buf,
-{
+impl WireDecodeWithContext<Bytes> for DataplanePath {
     type Error = DecodeError;
-    type Context = (MaybeEncoded<PathType, u8>, usize);
+    type Context = (PathType, usize);
 
     fn decode_with_context(
-        data: &mut T,
-        type_and_length: (MaybeEncoded<PathType, u8>, usize),
+        data: &mut Bytes,
+        (path_type, length_hint): Self::Context,
     ) -> Result<Self, Self::Error> {
-        let (path_type, path_length) = type_and_length;
-        if data.remaining() < path_length {
-            return Err(DecodeError::PacketEmptyOrTruncated);
-        }
-
         match path_type {
-            MaybeEncoded::Decoded(PathType::Empty) => Err(Self::Error::EmptyPath),
-            MaybeEncoded::Decoded(PathType::Scion) => {
-                Ok(StandardPath::decode_with_context(data, path_length)?.into())
-            }
-            MaybeEncoded::Decoded(_) | MaybeEncoded::Encoded(_) => {
-                Ok(PathHeader::Unsupported(data.copy_to_bytes(path_length)))
+            PathType::Empty => Ok(DataplanePath::EmptyPath),
+            PathType::Scion => Ok(StandardPath::decode(data)?.into()),
+            other => {
+                if data.remaining() < length_hint {
+                    Err(Self::Error::PacketEmptyOrTruncated)
+                } else {
+                    Ok(DataplanePath::Unsupported {
+                        path_type: other,
+                        bytes: data.split_to(length_hint),
+                    })
+                }
             }
         }
     }

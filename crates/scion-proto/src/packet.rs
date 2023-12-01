@@ -19,7 +19,7 @@ mod address_header;
 pub use address_header::{AddressHeader, RawHostAddress};
 
 mod path_header;
-pub use path_header::PathHeader;
+pub use path_header::DataplanePath;
 
 /// Instances of an object associated with both a source and destination endpoint.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -36,15 +36,12 @@ pub struct ScionPacket {
     /// Source and destination addresses.
     pub address_header: AddressHeader,
     /// The path to the destination, when necessary.
-    pub path_header: Option<PathHeader>,
+    pub path_header: DataplanePath,
     /// The packet payload.
     pub payload: Bytes,
 }
 
-impl<T> WireDecode<T> for ScionPacket
-where
-    T: Buf,
-{
+impl<T: Buf> WireDecode<T> for ScionPacket {
     type Error = DecodeError;
 
     fn decode(data: &mut T) -> Result<Self, Self::Error> {
@@ -52,31 +49,28 @@ where
 
         // Limit the data for headers to the length specified by the common header
         let mut header_data = data.take(common_header.remaining_header_length());
-
         let address_header =
             AddressHeader::decode_with_context(&mut header_data, common_header.address_info)?;
 
-        let path_context = (common_header.path_type, header_data.remaining());
-        let path_header = match PathHeader::decode_with_context(&mut header_data, path_context) {
-            Err(DecodeError::EmptyPath) => None,
-            other => Some(other?),
-        };
+        // The path requires a Bytes, if we were already parsing a Bytes, then this is just an
+        // Arc increment, otherwise we copy the bytes needed for the path.
+        let mut path_bytes = header_data.copy_to_bytes(header_data.remaining());
+        let context = (common_header.path_type, path_bytes.len());
+        let path_header = DataplanePath::decode_with_context(&mut path_bytes, context)?;
 
-        // The path header consumes all the remaining header bytes
-        debug_assert_eq!(header_data.remaining(), 0);
-
-        if data.remaining() < common_header.payload_size() {
-            return Err(DecodeError::PacketEmptyOrTruncated);
+        if path_bytes.has_remaining() {
+            Err(DecodeError::InconsistentPathLength)
+        } else if data.remaining() < common_header.payload_size() {
+            Err(DecodeError::PacketEmptyOrTruncated)
+        } else {
+            let payload = data.copy_to_bytes(common_header.payload_size());
+            Ok(Self {
+                common_header,
+                address_header,
+                path_header,
+                payload,
+            })
         }
-
-        let payload = data.copy_to_bytes(common_header.payload_size());
-
-        Ok(Self {
-            common_header,
-            address_header,
-            path_header,
-            payload,
-        })
     }
 }
 
@@ -89,6 +83,8 @@ pub enum DecodeError {
     InvalidHeaderLength(u8),
     #[error("the provided bytes did not include the full packet")]
     PacketEmptyOrTruncated,
+    #[error("the path type and length do not correspond")]
+    InconsistentPathLength,
     #[error("attempted to decode the empty path type")]
     EmptyPath,
     #[error("invalid path header: {0}")]
