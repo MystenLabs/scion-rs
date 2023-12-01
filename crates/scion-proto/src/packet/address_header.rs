@@ -25,6 +25,19 @@ pub struct AddressHeader {
     pub host: ByEndpoint<MaybeEncoded<Host, (AddressInfo, RawHostAddress)>>,
 }
 
+impl AddressHeader {
+    /// Creates a new AddressHeader with the specified ISD-AS numbers and hosts.
+    pub fn new(ia: ByEndpoint<IsdAsn>, host: ByEndpoint<Host>) -> Self {
+        Self {
+            ia,
+            host: ByEndpoint {
+                destination: MaybeEncoded::Decoded(host.destination),
+                source: MaybeEncoded::Decoded(host.source),
+            },
+        }
+    }
+}
+
 impl<T: Buf> WireDecodeWithContext<T> for AddressHeader {
     type Error = DecodeError;
     type Context = ByEndpoint<AddressInfo>;
@@ -60,39 +73,56 @@ impl WireEncode for AddressHeader {
         buffer.put_u64(self.ia.destination.into());
         buffer.put_u64(self.ia.source.into());
 
-        encode_host(self.host.destination, buffer)?;
-        encode_host(self.host.source, buffer)
+        try_encode_host(self.host.destination, buffer)?;
+        try_encode_host(self.host.source, buffer)?;
+
+        Ok(())
     }
 }
 
-fn encode_host(
+#[inline]
+fn get_encoded_length(host: &MaybeEncoded<Host, (AddressInfo, RawHostAddress)>) -> usize {
+    match host {
+        MaybeEncoded::Decoded(host) => AddressInfo::for_host(host).address_length(),
+        MaybeEncoded::Encoded((info, _)) => info.address_length(),
+    }
+}
+
+fn try_encode_host(
     host: MaybeEncoded<Host, (AddressInfo, RawHostAddress)>,
     buffer: &mut impl BufMut,
-) -> Result<(), InadequateBufferSize> {
-    match host {
-        MaybeEncoded::Decoded(host_addr) => {
-            if buffer.remaining_mut() < AddressInfo::for_host(&host_addr).address_length() {
-                return Err(InadequateBufferSize);
-            }
+) -> Result<usize, InadequateBufferSize> {
+    if buffer.remaining_mut() < get_encoded_length(&host) {
+        Err(InadequateBufferSize)
+    } else {
+        Ok(encode_host(host, buffer))
+    }
+}
 
-            match host_addr {
-                Host::Ip(std::net::IpAddr::V4(addr)) => buffer.put_slice(&addr.octets()),
-                Host::Ip(std::net::IpAddr::V6(addr)) => buffer.put_slice(&addr.octets()),
-                Host::Svc(addr) => {
-                    buffer.put_u16(addr.into());
-                    buffer.put_u16(0);
-                }
+/// Encodes the host into the buffer.
+///
+/// Panics if the buffer has insufficient capacity.
+pub(crate) fn encode_host(
+    host: MaybeEncoded<Host, (AddressInfo, RawHostAddress)>,
+    buffer: &mut impl BufMut,
+) -> usize {
+    let initial_length = buffer.remaining_mut();
+
+    match host {
+        MaybeEncoded::Decoded(host_addr) => match host_addr {
+            Host::Ip(std::net::IpAddr::V4(addr)) => buffer.put_slice(&addr.octets()),
+            Host::Ip(std::net::IpAddr::V6(addr)) => buffer.put_slice(&addr.octets()),
+            Host::Svc(addr) => {
+                buffer.put_u16(addr.into());
+                buffer.put_u16(0);
             }
-        }
+        },
         MaybeEncoded::Encoded((addr_info, encoded_host)) => {
-            if buffer.remaining_mut() < addr_info.address_length() {
-                return Err(InadequateBufferSize);
-            }
             buffer.put_slice(&encoded_host[..addr_info.address_length()]);
         }
     }
 
-    Ok(())
+    initial_length - buffer.remaining_mut()
 }
 
 fn maybe_decode_host<T>(

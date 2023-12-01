@@ -7,6 +7,7 @@ use super::{error::AddressKind, AddressParseError};
 
 /// A SCION autonomous system (AS) number
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct Asn(u64);
 
 impl Asn {

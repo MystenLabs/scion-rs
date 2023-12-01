@@ -12,3 +12,6 @@ tonic = { workspace = true }
 
 [build-dependencies]
 tonic-build = { workspace = true }
+
+[lib]
+bench = false

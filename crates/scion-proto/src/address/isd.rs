@@ -10,6 +10,7 @@ use super::{error::AddressKind, AddressParseError};
 /// See formatting and allocations here:
 /// <https://github.com/scionproto/scion/wiki/ISD-and-AS-numbering#isd-numbers>
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct Isd(u16);
 
 impl Isd {

@@ -21,11 +21,24 @@ pub use address_header::{AddressHeader, RawHostAddress};
 mod path_header;
 pub use path_header::DataplanePath;
 
+mod checksum;
+pub use checksum::ChecksumDigest;
+
 /// Instances of an object associated with both a source and destination endpoint.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct ByEndpoint<T> {
     pub destination: T,
     pub source: T,
+}
+
+impl<T: Clone> ByEndpoint<T> {
+    /// Create a new instance where both the source and destination have the same value.
+    pub fn with_cloned(source_and_destination: T) -> Self {
+        Self {
+            destination: source_and_destination.clone(),
+            source: source_and_destination,
+        }
+    }
 }
 
 /// A SCION network packet.
