@@ -6,12 +6,12 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-bytes = "1.5.0"
+bytes = { workspace = true }
 chrono = { version = "0.4.31", default-features = false }
-scion-grpc = { version = "0.1.0", path = "../scion-grpc" }
+scion-grpc = { workspace = true }
 serde = { version = "1.0.188", features = ["derive"] }
-thiserror = "1.0.48"
-tracing = "0.1.40"
+thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-prost-types = "0.12.2"
+prost-types = { workspace = true }

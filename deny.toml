@@ -66,6 +66,8 @@ skip = [
     # axum + redox_syscall use an old version
     { name = "bitflags", version = "=1.3.2" },
 ]
+# Several crates depend on an older version of windows-sys
+skip-tree = [{ name = "windows-sys", depth = 3, version = "0.48"}]
 
 # This section is considered when running `cargo deny check sources`.
 # More documentation about the 'sources' section can be found here:
