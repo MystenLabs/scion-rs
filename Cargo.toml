@@ -6,3 +6,13 @@ members = [
     "crates/scion-grpc",
     "crates/scion-proto",
 ]
+
+[workspace.dependencies]
+bytes = "1.5.0"
+prost = "0.12"
+prost-types = "0.12"
+scion-grpc = { version = "0.1.0", path = "crates/scion-grpc" }
+thiserror = "1.0.50"
+tonic = "0.10"
+tonic-build = "0.10"
+tracing = "0.1.40"
