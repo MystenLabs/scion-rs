@@ -60,7 +60,7 @@ pub struct CommonHeader {
     ///
     /// Recognized path types are decoded whereas unrecognized path types are provided
     /// in their wire format.
-    pub path_type: MaybeEncoded<PathType, u8>,
+    pub path_type: PathType,
 
     /// The source and destination host address type and length.
     ///
@@ -187,10 +187,7 @@ impl From<ByEndpoint<AddressInfo>> for u8 {
     }
 }
 
-impl<T> WireDecode<T> for CommonHeader
-where
-    T: Buf,
-{
+impl<T: Buf> WireDecode<T> for CommonHeader {
     type Error = DecodeError;
 
     fn decode(data: &mut T) -> Result<Self, Self::Error> {
@@ -261,7 +258,7 @@ impl WireEncode for CommonHeader {
         buffer.put_u8(self.next_header);
         buffer.put_u8(self.header_length_factor.get());
         buffer.put_u16(self.payload_length);
-        buffer.put_u8(self.path_type.into_encoded());
+        buffer.put_u8(self.path_type.into());
         buffer.put_u8(self.address_info.into());
         buffer.put_u16(self.reserved);
 
@@ -284,7 +281,7 @@ mod tests {
             next_header: 17,
             header_length_factor: NonZeroU8::new(9).unwrap(),
             payload_length: 0,
-            path_type: MaybeEncoded::Decoded(PathType::Empty),
+            path_type: PathType::Empty,
             address_info: ByEndpoint {
                 destination: AddressInfo::from_host_type(HostType::Ipv4).unwrap(),
                 source: AddressInfo::from_host_type(HostType::Ipv4).unwrap(),
@@ -326,7 +323,7 @@ mod tests {
             let (mut expected_encoded, header) = base_header();
 
             let header = CommonHeader {
-                path_type: MaybeEncoded::Encoded(5),
+                path_type: PathType::Other(5),
                 ..header
             };
             expected_encoded[8] = 0x05;
@@ -390,7 +387,7 @@ mod tests {
             assert_eq!(
                 CommonHeader::decode(&mut data.as_slice()).expect("must successfully decode"),
                 CommonHeader {
-                    path_type: MaybeEncoded::Encoded(5),
+                    path_type: PathType::Other(5),
                     ..expected
                 }
             );

@@ -4,7 +4,11 @@ use bytes::Bytes;
 use scion_grpc::daemon::v1 as daemon_grpc;
 use tracing::warn;
 
-use crate::{address::IsdAsn, packet::ByEndpoint};
+use crate::{
+    address::IsdAsn,
+    packet::{ByEndpoint, DataplanePath},
+    wire_encoding::WireDecode,
+};
 
 pub mod error;
 pub use error::{DataplanePathErrorKind, PathParseError, PathParseErrorKind};
@@ -23,7 +27,7 @@ use self::standard::StandardPath;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Path {
     /// The raw bytes to be added as the path header to SCION dataplane packets
-    dataplane_path: StandardPath,
+    dataplane_path: DataplanePath,
     /// The underlay address (IP + port) of the next hop; i.e., the local border router
     underlay_next_hop: SocketAddr,
     /// The ISD-ASN where the path starts and ends
@@ -38,12 +42,13 @@ impl Path {
         mut value: daemon_grpc::Path,
         isd_asn: ByEndpoint<IsdAsn>,
     ) -> Result<Self, PathParseError> {
-        let dataplane_path = Bytes::from(std::mem::take(&mut value.raw));
+        let mut dataplane_path = Bytes::from(std::mem::take(&mut value.raw));
         if dataplane_path.is_empty() {
             return Err(PathParseErrorKind::EmptyRaw.into());
         };
-        let dataplane_path = StandardPath::decode_from_buffer(dataplane_path)
-            .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidRaw))?;
+        let dataplane_path = StandardPath::decode(&mut dataplane_path)
+            .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidRaw))?
+            .into();
 
         let underlay_next_hop = match &value.interface {
             Some(daemon_grpc::Interface {
