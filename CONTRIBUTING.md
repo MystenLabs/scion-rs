@@ -86,7 +86,7 @@ machine.
 # if you have sufficient resources on the host, you may want to increase the VM's resources
 multipass launch --disk 10G --memory 4G --cpus 2 --name scion --cloud-init - <<EOF
 users:
-- name: username
+- name: ubuntu
   sudo: ALL=(ALL) NOPASSWD:ALL
   ssh_authorized_keys:
   - $( cat ~/.ssh/id*.pub )
@@ -120,19 +120,15 @@ cd scion
 export PATH=/home/ubuntu/.local/bin/:$PATH
 make build
 
-# run local topology and check that it works
+# enable routing to local addresses
+echo "net.ipv4.conf.all.route_localnet = 1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl --system
+
+# optional: run local topology and check that everything works
 ./scion.sh topology -c topology/tiny.topo
 ./scion.sh run
 sleep 5
 bin/scion showpaths --sciond $(./scion.sh sciond-addr 111) 1-ff00:0:112
-
-# make SCION applications of AS 1-ffaa:0:111 available on host
-EXTERNAL_ADDRESS=$(ip route get 9.9.9.9 | sed 's/.*src \([^ ]*\).*/\1/;t;d')
-DAEMON_ADDRESS_111=$(cat gen/sciond_addresses.json | jq -r '."1-ff00:0:111"')
-echo "net.ipv4.conf.all.route_localnet = 1" | sudo tee -a /etc/sysctl.conf
-sudo sysctl --system
-sudo iptables -t nat -I PREROUTING -d $EXTERNAL_ADDRESS -p tcp --match multiport --dports 30000:32000 -j DNAT --to $DAEMON_ADDRESS_111
-sudo apt-get install iptables-persistent
 ```
 
 Now you can access SCION services from the host system and forward the dispatcher UNIX socket to run integration tests.
