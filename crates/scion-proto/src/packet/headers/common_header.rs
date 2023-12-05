@@ -2,9 +2,10 @@ use std::num::NonZeroU8;
 
 use bytes::{Buf, BufMut};
 
-use super::{path_header::PathType, ByEndpoint, DecodeError, InadequateBufferSize};
+use super::path_header::{DataplanePath, PathType};
 use crate::{
-    address::{Host, HostType},
+    address::{Host, HostType, SocketAddr},
+    packet::{ByEndpoint, DecodeError, EncodeError, InadequateBufferSize},
     wire_encoding::{self, MaybeEncoded, WireDecode, WireEncode},
 };
 
@@ -18,7 +19,7 @@ use crate::{
 /// Currently, only version 0 of the packet specification is supported.
 ///
 /// [rfc]: https://www.ietf.org/archive/id/draft-dekater-scion-dataplane-00.html#name-common-header
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CommonHeader {
     /// The header version.
     pub version: Version,
@@ -81,14 +82,52 @@ impl CommonHeader {
     /// The length of a version 0 common header in bytes.
     pub const LENGTH: usize = 12;
 
+    /// The multiplicand for the length factor
+    pub const HEADER_LENGTH_MULTIPLICAND: usize = 4;
+
+    /// The maximum length in Bytes of the whole SCION header
+    pub const MAX_HEADER_LENGTH: usize = u8::MAX as usize * Self::HEADER_LENGTH_MULTIPLICAND;
+
     /// Minimum header length factor defined as 36 bytes / 4.
     const MIN_HEADER_LENGTH_FACTOR: u8 = 9;
+
+    pub fn new(
+        endhosts: &ByEndpoint<SocketAddr>,
+        path: &DataplanePath,
+        header_length: usize,
+        payload_length: usize,
+        next_header: u8,
+    ) -> Result<Self, EncodeError> {
+        if header_length % CommonHeader::HEADER_LENGTH_MULTIPLICAND != 0 {
+            return Err(EncodeError::MisalignedHeader);
+        }
+        let header_length_factor = NonZeroU8::new(
+            (header_length / CommonHeader::HEADER_LENGTH_MULTIPLICAND)
+                .try_into()
+                .map_err(|_| EncodeError::HeaderTooLarge)?,
+        )
+        .expect("cannot be 0");
+
+        Ok(Self {
+            version: Version::default(),
+            traffic_class: 0,
+            flow_id: Self::simple_flow_id(endhosts),
+            next_header,
+            header_length_factor,
+            payload_length: payload_length
+                .try_into()
+                .map_err(|_| EncodeError::PayloadTooLarge)?,
+            path_type: path.path_type(),
+            address_info: endhosts.map(SocketAddr::address_info),
+            reserved: 0,
+        })
+    }
 
     /// The total length of the entire SCION header
     ///
     /// Equivalent to 4 * [`Self::header_length_factor`].
     pub fn header_length(&self) -> usize {
-        usize::from(self.header_length_factor.get()) * 4
+        usize::from(self.header_length_factor.get()) * Self::HEADER_LENGTH_MULTIPLICAND
     }
 
     /// Returns the length of the remaining SCION headers.
@@ -101,6 +140,13 @@ impl CommonHeader {
     /// The payload length as a usize.
     pub fn payload_size(&self) -> usize {
         usize::try_from(self.payload_length).expect("usize to be larger than 16-bits")
+    }
+
+    // TODO(mlegner): More sophisticated flow ID?
+    /// Simple flow ID containing the XOR of source and destination port with a prepended 1
+    /// to prevent a value of 0.
+    fn simple_flow_id(endhosts: &ByEndpoint<SocketAddr>) -> FlowId {
+        (0x1_0000 | (endhosts.source.port() ^ endhosts.destination.port()) as u32).into()
     }
 }
 
@@ -245,11 +291,12 @@ impl<T: Buf> WireDecode<T> for CommonHeader {
 impl WireEncode for CommonHeader {
     type Error = InadequateBufferSize;
 
-    fn encode_to<T: BufMut>(&self, buffer: &mut T) -> Result<(), Self::Error> {
-        if buffer.remaining_mut() < Self::LENGTH {
-            return Err(InadequateBufferSize);
-        }
+    #[inline]
+    fn encoded_length(&self) -> usize {
+        Self::LENGTH
+    }
 
+    fn encode_to_unchecked<T: BufMut>(&self, buffer: &mut T) {
         buffer.put_u32(
             (self.version.get() as u32) << 28
                 | (self.traffic_class as u32) << 20
@@ -261,8 +308,6 @@ impl WireEncode for CommonHeader {
         buffer.put_u8(self.path_type.into());
         buffer.put_u8(self.address_info.into());
         buffer.put_u16(self.reserved);
-
-        Ok(())
     }
 }
 

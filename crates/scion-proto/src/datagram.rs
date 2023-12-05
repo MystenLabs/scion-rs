@@ -1,14 +1,22 @@
-#![allow(unused)]
-use bytes::{Buf, Bytes};
-use scion_proto::{
-    packet::{AddressHeader, ByEndpoint, ChecksumDigest},
-    wire_encoding::WireDecode,
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+
+use crate::{
+    packet::{AddressHeader, ByEndpoint, ChecksumDigest, InadequateBufferSize},
+    wire_encoding::{WireDecode, WireEncodeVec},
 };
 
 #[derive(Debug, thiserror::Error)]
-pub(super) enum UdpDecodeError {
+pub enum UdpDecodeError {
     #[error("datagram is empty or was truncated")]
     DatagramEmptyOrTruncated,
+    #[error("next-header value of SCION header is not correct")]
+    WrongProtocolNumber(u8),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum UdpEncodeError {
+    #[error("payload length cannot be encoded")]
+    PayloadTooLarge,
 }
 
 /// Scion UDP datagram
@@ -18,7 +26,7 @@ pub(super) enum UdpDecodeError {
 ///
 /// [RFC]: https://www.ietf.org/archive/id/draft-dekater-scion-dataplane-00.html
 #[derive(Debug, Default)]
-pub(super) struct UdpDatagram {
+pub struct UdpDatagram {
     /// The source and destination ports
     pub port: ByEndpoint<u16>,
     /// The length of the header and payload
@@ -30,8 +38,23 @@ pub(super) struct UdpDatagram {
 }
 
 impl UdpDatagram {
-    const PROTOCOL_NUMBER: u8 = 17;
-    const HEADER_LEN: usize = 8;
+    pub const PROTOCOL_NUMBER: u8 = 17;
+    pub const HEADER_LEN: usize = 8;
+
+    /// Creates a new datagram setting the length field appropriately
+    ///
+    /// Returns an error if the payload is too large
+    pub fn new(port: ByEndpoint<u16>, payload: Bytes) -> Result<Self, UdpEncodeError> {
+        let datagram = Self {
+            port,
+            length: (payload.len() + Self::HEADER_LEN)
+                .try_into()
+                .map_err(|_| UdpEncodeError::PayloadTooLarge)?,
+            checksum: 0,
+            payload,
+        };
+        Ok(datagram)
+    }
 
     /// Compute the checksum for this datagram using the provided address header.
     pub fn calculate_checksum(&self, address_header: &AddressHeader) -> u16 {
@@ -53,6 +76,28 @@ impl UdpDatagram {
     pub fn set_checksum(&mut self, address_header: &AddressHeader) {
         self.checksum = 0;
         self.checksum = self.calculate_checksum(address_header);
+    }
+}
+
+impl WireEncodeVec<2> for UdpDatagram {
+    type Error = InadequateBufferSize;
+
+    fn encode_with_unchecked(&self, buffer: &mut BytesMut) -> [Bytes; 2] {
+        buffer.put_u16(self.port.source);
+        buffer.put_u16(self.port.destination);
+        buffer.put_u16(self.length);
+        buffer.put_u16(self.checksum);
+        [buffer.split().freeze(), self.payload.clone()]
+    }
+
+    #[inline]
+    fn total_length(&self) -> usize {
+        Self::HEADER_LEN + self.payload.len()
+    }
+
+    #[inline]
+    fn required_capacity(&self) -> usize {
+        Self::HEADER_LEN
     }
 }
 

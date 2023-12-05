@@ -27,13 +27,13 @@ use self::standard::StandardPath;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Path {
     /// The raw bytes to be added as the path header to SCION dataplane packets
-    dataplane_path: DataplanePath,
+    pub dataplane_path: DataplanePath,
     /// The underlay address (IP + port) of the next hop; i.e., the local border router
-    underlay_next_hop: Option<SocketAddr>,
+    pub underlay_next_hop: Option<SocketAddr>,
     /// The ISD-ASN where the path starts and ends
     pub isd_asn: ByEndpoint<IsdAsn>,
     /// Path metadata
-    metadata: Option<PathMetadata>,
+    pub metadata: Option<PathMetadata>,
 }
 
 impl Path {

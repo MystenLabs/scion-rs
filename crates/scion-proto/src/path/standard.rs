@@ -186,7 +186,6 @@ pub struct StandardPath {
     /// The meta information about the stored path.
     meta_header: PathMetaHeader,
     /// The raw data containing the meta_header, info, and hop fields.
-    #[allow(unused)]
     encoded_path: Bytes,
 }
 
@@ -201,6 +200,11 @@ impl StandardPath {
             meta_header: self.meta_header.clone(),
             encoded_path: Bytes::copy_from_slice(&self.encoded_path),
         }
+    }
+
+    /// Returns the encoded raw path
+    pub fn raw(&self) -> Bytes {
+        self.encoded_path.clone()
     }
 }
 

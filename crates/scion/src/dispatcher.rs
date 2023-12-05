@@ -1,6 +1,9 @@
-use std::{io, path::Path};
+use std::{
+    io::{self, IoSlice},
+    path::Path,
+};
 
-use bytes::{Buf, BytesMut};
+use bytes::BytesMut;
 use scion_proto::{
     address::SocketAddr,
     reliable::{
@@ -12,6 +15,7 @@ use scion_proto::{
         RegistrationExchange,
         StreamParser,
     },
+    wire_encoding::{WireEncode, WireEncodeVec},
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -97,7 +101,10 @@ impl DispatcherStream {
         let mut buffer = [0u8; 64];
         let message_length = exchange.register(address, &mut buffer.as_mut())?;
 
-        if let Err(err) = self.send_via(None, &mut &buffer[..message_length]).await {
+        if let Err(err) = self
+            .send_via(None, &[IoSlice::new(&buffer[..message_length])])
+            .await
+        {
             match err {
                 SendError::Io(err) => return Err(err.into()),
                 SendError::PayloadTooLarge(_) => unreachable!(),
@@ -115,21 +122,35 @@ impl DispatcherStream {
         Ok(exchange.handle_response(&packet.content)?)
     }
 
+    pub async fn send_packet_via<const N: usize>(
+        &mut self,
+        relay: Option<std::net::SocketAddr>,
+        packet: impl WireEncodeVec<N>,
+    ) -> Result<(), SendError> {
+        // we know that the buffer is large enough
+        let bytes = packet.encode_with_unchecked(&mut self.send_buffer);
+        let buffers: [IoSlice; N] = core::array::from_fn(|i| IoSlice::new(&bytes[i][..]));
+        self.send_via(relay, &buffers).await
+    }
+
     pub async fn send_via(
         &mut self,
         relay: Option<std::net::SocketAddr>,
-        data: &mut impl Buf,
+        buffers: &[std::io::IoSlice<'_>],
     ) -> Result<(), SendError> {
-        tracing::trace!(?relay, "sending {} bytes", data.remaining());
+        let packet_len = buffers.iter().map(|b| b.len()).sum();
+        tracing::trace!(?relay, "sending {} bytes", packet_len);
+
         let header = CommonHeader {
             destination: relay,
-            payload_length: u32::try_from(data.remaining())
-                .map_err(|_| SendError::PayloadTooLarge(data.remaining()))?,
+            payload_length: u32::try_from(packet_len)
+                .map_err(|_| SendError::PayloadTooLarge(packet_len))?,
         };
-        header.encode_to(&mut self.send_buffer);
 
+        // we know that the buffer is large enough
+        header.encode_to_unchecked(&mut self.send_buffer);
         self.inner.write_all_buf(&mut self.send_buffer).await?;
-        self.inner.write_all_buf(data).await?;
+        let _ = self.inner.write_vectored(buffers).await?;
 
         Ok(())
     }
