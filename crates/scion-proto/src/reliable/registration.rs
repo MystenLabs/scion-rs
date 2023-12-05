@@ -28,7 +28,7 @@ use bytes::{Buf, BufMut};
 
 use super::wire_utils::LAYER4_PORT_OCTETS;
 use crate::{
-    address::{HostAddress, IsdAsn, ServiceAddress, SocketAddr as ScionSocketAddr},
+    address::{HostType, IsdAsn, ServiceAddress, SocketAddr as ScionSocketAddr},
     datagram::UdpDatagram,
     reliable::{
         wire_utils::{encoded_address_and_port_length, encoded_address_length},
@@ -79,6 +79,7 @@ impl RegistrationRequest {
     /// # Panics
     ///
     /// Panics if there is not enough space in the buffer to encode the request.
+    // TODO(jsmith): Implement WireEncode for this type.
     pub fn encode_to(&self, buffer: &mut impl BufMut) {
         let initial_remaining = buffer.remaining_mut();
 
@@ -105,14 +106,13 @@ impl RegistrationRequest {
         const BASE_LENGTH: usize = 13;
 
         BASE_LENGTH
-            + encoded_address_length(self.public_address.host_address_type())
-            + if self.bind_address.is_some() {
-                ADDRESS_TYPE_OCTETS
-                    + encoded_address_and_port_length(self.bind_address.host_address_type())
-            } else {
-                0
-            }
-            + encoded_address_and_port_length(self.associated_service.host_address_type())
+            + encoded_address_length(self.public_address.ip().into())
+            + self
+                .bind_address
+                .as_ref()
+                .map(|addr| ADDRESS_TYPE_OCTETS + encoded_address_and_port_length(addr.ip().into()))
+                .unwrap_or(0)
+            + encoded_address_and_port_length(self.associated_service.into())
     }
 
     #[inline]
@@ -154,7 +154,7 @@ impl RegistrationResponse {
 
 fn encode_address(buffer: &mut impl BufMut, address: &SocketAddr) {
     buffer.put_u16(address.port());
-    buffer.put_u8(address.host_address_type().into());
+    buffer.put_u8(HostType::from(address.ip()).into());
 
     match address.ip() {
         IpAddr::V4(ipv4) => buffer.put(ipv4.octets().as_slice()),

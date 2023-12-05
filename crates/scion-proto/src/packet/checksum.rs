@@ -2,7 +2,7 @@ use std::slice;
 
 use super::{AddressHeader, AddressInfo, RawHostAddress};
 use crate::{
-    address::Host,
+    address::HostAddr,
     wire_encoding::{MaybeEncoded, WireEncode},
 };
 
@@ -62,7 +62,10 @@ impl ChecksumDigest {
     }
 
     #[inline]
-    fn add_host(&mut self, host: MaybeEncoded<Host, (AddressInfo, RawHostAddress)>) -> &mut Self {
+    fn add_host(
+        &mut self,
+        host: MaybeEncoded<HostAddr, (AddressInfo, RawHostAddress)>,
+    ) -> &mut Self {
         let mut buffer = [0_u8; 16];
         host.encode_to_unchecked(&mut buffer.as_mut());
         self.add_slice(&buffer[..host.encoded_length()]);
@@ -158,7 +161,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        address::{Host, ServiceAddress},
+        address::{HostAddr, ServiceAddress},
         packet::ByEndpoint,
         wire_encoding::WireEncode,
     };
@@ -332,8 +335,8 @@ mod tests {
 
     test_checksum! {
         name: ipv4_to_ipv4,
-        destination: {ia: "1-ff00:0:112", host: Host::Ip("174.16.4.2".parse()?)},
-        source: {ia: "1-ff00:0:110", host: Host::Ip("172.16.4.1".parse()?)},
+        destination: {ia: "1-ff00:0:112", host: HostAddr::V4("174.16.4.2".parse()?)},
+        source: {ia: "1-ff00:0:110", host: HostAddr::V4("172.16.4.1".parse()?)},
         data: b"\x00\x00\xaa\xbb\xcc\xdd",
         protocol: 1u8,
         checksum: 0x2615_u16
@@ -341,8 +344,8 @@ mod tests {
 
     test_checksum! {
         name: ipv4_to_ipv4_odd_length,
-        destination: {ia: "1-ff00:0:112", host: Host::Ip("174.16.4.2".parse()?)},
-        source: {ia: "1-ff00:0:110", host: Host::Ip("172.16.4.1".parse()?)},
+        destination: {ia: "1-ff00:0:112", host: HostAddr::V4("174.16.4.2".parse()?)},
+        source: {ia: "1-ff00:0:110", host: HostAddr::V4("172.16.4.1".parse()?)},
         data: b"\0\0\xaa\xbb\xcc\xdd\xee",
         protocol: 1u8,
         checksum: 0x3813_u16
@@ -350,8 +353,8 @@ mod tests {
 
     test_checksum! {
         name: ipv4_to_ipv6,
-        destination: {ia: "1-ff00:0:112", host: Host::Ip("dead::beef".parse()?)},
-        source: {ia: "1-ff00:0:110", host: Host::Ip("174.16.4.1".parse()?)},
+        destination: {ia: "1-ff00:0:112", host: HostAddr::V6("dead::beef".parse()?)},
+        source: {ia: "1-ff00:0:110", host: HostAddr::V4("174.16.4.1".parse()?)},
         data: b"\0\0\xaa\xbb\xcc\xdd",
         protocol: 17u8,
         checksum: 0x387a_u16
@@ -359,8 +362,8 @@ mod tests {
 
     test_checksum! {
         name: ipv4_to_svc,
-        destination: {ia: "1-ff00:0:112", host: Host::Svc(ServiceAddress::CONTROL)},
-        source: {ia: "1-ff00:0:110", host: Host::Ip("174.16.4.1".parse()?)},
+        destination: {ia: "1-ff00:0:112", host: HostAddr::Svc(ServiceAddress::CONTROL)},
+        source: {ia: "1-ff00:0:110", host: HostAddr::V4("174.16.4.1".parse()?)},
         data: b"\0\0\xaa\xbb\xcc\xdd",
         protocol: 223u8,
         checksum: 0xd547_u16

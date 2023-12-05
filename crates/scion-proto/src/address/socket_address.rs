@@ -1,10 +1,10 @@
 use std::{
     fmt::Display,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    net::{Ipv4Addr, Ipv6Addr},
     str::FromStr,
 };
 
-use super::{error::AddressKind, AddressParseError, Host, IsdAsn, ServiceAddress};
+use super::{error::AddressKind, AddressParseError, HostAddr, IsdAsn, ServiceAddress};
 use crate::packet::AddressInfo;
 
 /// A SCION socket address.
@@ -24,13 +24,11 @@ pub enum SocketAddr {
 
 impl SocketAddr {
     /// Creates a new SCION socket address from an ISD-AS number, SCION host, and port.
-    pub const fn new(isd_asn: IsdAsn, host: Host, port: u16) -> Self {
+    pub const fn new(isd_asn: IsdAsn, host: HostAddr, port: u16) -> Self {
         match host {
-            Host::Ip(ip_host) => match ip_host {
-                IpAddr::V4(ip) => SocketAddr::V4(SocketAddrV4::new(isd_asn, ip, port)),
-                IpAddr::V6(ip) => SocketAddr::V6(SocketAddrV6::new(isd_asn, ip, port)),
-            },
-            Host::Svc(service) => SocketAddr::Svc(SocketAddrSvc::new(isd_asn, service, port)),
+            HostAddr::V4(ip) => SocketAddr::V4(SocketAddrV4::new(isd_asn, ip, port)),
+            HostAddr::V6(ip) => SocketAddr::V6(SocketAddrV6::new(isd_asn, ip, port)),
+            HostAddr::Svc(service) => SocketAddr::Svc(SocketAddrSvc::new(isd_asn, service, port)),
         }
     }
 
@@ -53,11 +51,11 @@ impl SocketAddr {
     }
 
     /// Returns the host address associated with this socket address.
-    pub const fn host(&self) -> Host {
+    pub fn host(&self) -> HostAddr {
         match self {
-            SocketAddr::V4(addr) => Host::Ip(IpAddr::V4(*addr.ip())),
-            SocketAddr::V6(addr) => Host::Ip(IpAddr::V6(*addr.ip())),
-            SocketAddr::Svc(addr) => Host::Svc(*addr.service()),
+            SocketAddr::V4(addr) => addr.host(),
+            SocketAddr::V6(addr) => addr.host(),
+            SocketAddr::Svc(addr) => addr.host(),
         }
     }
 
@@ -202,6 +200,11 @@ macro_rules! socket_address {
             /// Changes the port associated with this socket address.
             pub fn set_port(&mut self, new_port: u16) {
                 self.port = new_port;
+            }
+
+            /// Returns the host for the socket address
+            pub fn host(&self) -> HostAddr {
+                HostAddr::from(self.$field)
             }
         }
 

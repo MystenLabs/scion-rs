@@ -4,11 +4,7 @@ use bytes::{Buf, BufMut};
 use thiserror::Error;
 
 use super::{wire_utils::encoded_address_and_port_length, ADDRESS_TYPE_OCTETS};
-use crate::{
-    address::{HostAddress, HostType},
-    packet::InadequateBufferSize,
-    wire_encoding::WireEncode,
-};
+use crate::{address::HostType, packet::InadequateBufferSize, wire_encoding::WireEncode};
 
 /// Errors occurring during decoding of packets received over the reliable-relay protocol.
 #[derive(Error, Debug, Eq, PartialEq, Clone, Copy)]
@@ -171,7 +167,8 @@ impl WireEncode for CommonHeader {
 
     /// The number of bytes in the encoded common header.
     fn encoded_length(&self) -> usize {
-        Self::MIN_LENGTH + encoded_address_and_port_length(self.destination.host_address_type())
+        Self::MIN_LENGTH
+            + encoded_address_and_port_length(self.destination.as_ref().map(SocketAddr::ip).into())
     }
 
     /// Serialize a common header to the provided buffer.
@@ -186,13 +183,18 @@ impl WireEncode for CommonHeader {
         let initial_remaining = buffer.remaining_mut();
 
         buffer.put_u64(Self::COOKIE);
-        buffer.put_u8(self.destination.host_address_type().into());
+        buffer.put_u8(
+            self.destination
+                .map(|addr| HostType::from(addr.ip()))
+                .unwrap_or(HostType::None)
+                .into(),
+        );
         buffer.put_u32(self.payload_length);
 
         if let Some(destination) = self.destination.as_ref() {
             match destination.ip() {
-                IpAddr::V4(ipv4) => buffer.put(ipv4.octets().as_slice()),
-                IpAddr::V6(ipv6) => buffer.put(ipv6.octets().as_slice()),
+                IpAddr::V4(ipv4) => buffer.put_slice(&ipv4.octets()),
+                IpAddr::V6(ipv6) => buffer.put_slice(&ipv6.octets()),
             }
 
             buffer.put_u16(destination.port());
