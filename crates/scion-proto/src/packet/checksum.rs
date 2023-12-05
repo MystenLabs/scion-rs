@@ -1,7 +1,10 @@
 use std::slice;
 
-use super::{address_header, AddressHeader, AddressInfo, RawHostAddress};
-use crate::{address::Host, wire_encoding::MaybeEncoded};
+use super::{AddressHeader, AddressInfo, RawHostAddress};
+use crate::{
+    address::Host,
+    wire_encoding::{MaybeEncoded, WireEncode},
+};
 
 /// Incrementally computes the 16-bit checksum for upper layer protocols.
 ///
@@ -61,8 +64,8 @@ impl ChecksumDigest {
     #[inline]
     fn add_host(&mut self, host: MaybeEncoded<Host, (AddressInfo, RawHostAddress)>) -> &mut Self {
         let mut buffer = [0_u8; 16];
-        let encoded_length = address_header::encode_host(host, &mut buffer.as_mut());
-        self.add_slice(&buffer[..encoded_length]);
+        host.encode_to_unchecked(&mut buffer.as_mut());
+        self.add_slice(&buffer[..host.encoded_length()]);
         self
     }
 

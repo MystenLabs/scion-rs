@@ -1,9 +1,9 @@
-use bytes::{Buf, Bytes};
+use bytes::{Buf, BufMut, Bytes};
 
-use super::DecodeError;
 use crate::{
+    packet::{DecodeError, InadequateBufferSize},
     path::standard::StandardPath,
-    wire_encoding::{WireDecode, WireDecodeWithContext},
+    wire_encoding::{WireDecode, WireDecodeWithContext, WireEncode},
 };
 
 /// SCION path types that may be encountered in a packet
@@ -77,11 +77,40 @@ impl DataplanePath {
             },
         }
     }
+
+    pub fn path_type(&self) -> PathType {
+        match self {
+            Self::EmptyPath => PathType::Empty,
+            Self::Standard(_) => PathType::Scion,
+            Self::Unsupported { path_type, .. } => *path_type,
+        }
+    }
 }
 
 impl From<StandardPath> for DataplanePath {
     fn from(value: StandardPath) -> Self {
-        DataplanePath::Standard(value)
+        Self::Standard(value)
+    }
+}
+
+impl WireEncode for DataplanePath {
+    type Error = InadequateBufferSize;
+
+    #[inline]
+    fn encoded_length(&self) -> usize {
+        match self {
+            Self::Standard(path) => path.raw().len(),
+            Self::EmptyPath => 0,
+            Self::Unsupported { bytes, .. } => bytes.len(),
+        }
+    }
+
+    fn encode_to_unchecked<T: BufMut>(&self, buffer: &mut T) {
+        match self {
+            Self::Standard(path) => buffer.put(path.raw()),
+            Self::EmptyPath => (),
+            Self::Unsupported { bytes, .. } => buffer.put_slice(bytes),
+        }
     }
 }
 

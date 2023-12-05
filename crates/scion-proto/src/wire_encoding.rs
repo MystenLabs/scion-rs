@@ -1,4 +1,6 @@
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+
+use crate::packet::InadequateBufferSize;
 
 /// A trait for types decodable from a wire format, without any additional information.
 pub trait WireDecode<T>: Sized {
@@ -34,16 +36,149 @@ pub trait WireDecodeWithContext<T>: Sized {
     fn decode_with_context(data: &mut T, context: Self::Context) -> Result<Self, Self::Error>;
 }
 
+/// The trait provides methods to encode the object to a provided buffer.
+///
+/// To implement the trait with just a single error, only the [`Self::encoded_length`] and
+/// [`Self::encode_to_unchecked`] methods must be implemented. The default implementation of the
+/// [`Self::encode_to`] method then checks if the buffer has sufficient capacity and returns the
+/// default error otherwise.
+///
+/// If multiple different errors should be returned, the [`Self::encode_to`] method must be
+/// implemented in addition. In that case, the [`Self::encode_to_unchecked`] method can simply
+/// call `self.encode_to(buffer).unwrap()`.
 pub trait WireEncode {
     /// The error type returned on a failed encode.
-    type Error: std::fmt::Debug;
+    type Error: std::error::Error + Default;
 
-    fn encode_to<T: BufMut>(&self, buffer: &mut T) -> Result<(), Self::Error>;
+    /// Total length in bytes of the encoded data.
+    fn encoded_length(&self) -> usize;
 
+    /// Try to encode the object to the provided buffer.
+    ///
+    /// Errors:
+    ///
+    /// Returns an error if the buffer does not have sufficient capacity.
+    fn encode_to<T: BufMut>(&self, buffer: &mut T) -> Result<(), Self::Error> {
+        if buffer.remaining_mut() < self.encoded_length() {
+            return Err(Self::Error::default());
+        }
+        self.encode_to_unchecked(buffer);
+        Ok(())
+    }
+
+    /// Encode the object to the provided buffer.
+    ///
+    /// It is the caller's responsibility to provide a buffer of sufficient capacity.
+    ///
+    /// Can panic if the buffer does not have sufficient capacity.
+    fn encode_to_unchecked<T: BufMut>(&self, buffer: &mut T);
+
+    /// Encodes the object into a newly created buffer and returns it as a [`Bytes`] object.
     fn encode_to_bytes(&self) -> Bytes {
         let mut buffer = BytesMut::new();
-        self.encode_to(&mut buffer).unwrap(); // BytesMut will grow as needed
+        self.encode_to_unchecked(&mut buffer); // BytesMut will grow as needed
         buffer.freeze()
+    }
+}
+
+impl WireEncode for Bytes {
+    type Error = InadequateBufferSize;
+
+    #[inline]
+    fn encoded_length(&self) -> usize {
+        self.remaining()
+    }
+
+    #[inline]
+    fn encode_to_unchecked<T: BufMut>(&self, buffer: &mut T) {
+        buffer.put_slice(self)
+    }
+
+    #[inline]
+    fn encode_to_bytes(&self) -> Bytes {
+        self.clone()
+    }
+}
+
+/// The trait provides methods to encode the object to multiple `Bytes` objects, optionally using
+/// a provided buffer to prevent the need for allocation.
+///
+/// The generic parameter specifies the length of the returned array of `Bytes`.
+///
+/// To implement the trait with just a single error, only the [`Self::required_capacity`],
+/// [`Self::total_length`], and [`Self::encode_with_unchecked`] methods must be implemented.
+/// The default implementation of the [`Self::encode_with`] method then checks if the buffer has
+/// sufficient capacity and returns the default error otherwise.
+///
+/// If multiple different errors should be returned, the [`Self::encode_to`] method must be
+/// implemented in addition. In that case, the [`Self::encode_to_unchecked`] method can simply
+/// call `self.encode_to(buffer).unwrap()`.
+pub trait WireEncodeVec<const N: usize> {
+    /// The error type returned on a failed encode.
+    type Error: std::error::Error + Default;
+
+    /// Try to encode the object, optionally using the provided buffer.
+    ///
+    /// Errors:
+    ///
+    /// Returns an error if the buffer does not have sufficient capacity.
+    fn encode_with(&self, buffer: &mut BytesMut) -> Result<[Bytes; N], Self::Error> {
+        if buffer.remaining_mut() < self.required_capacity() {
+            return Err(Self::Error::default());
+        }
+        Ok(self.encode_with_unchecked(buffer))
+    }
+
+    /// Try to encode the object, optionally using the provided buffer.
+    ///
+    /// It is the caller's responsibility to provide a buffer of sufficient capacity.
+    ///
+    /// Can panic if the buffer does not have sufficient capacity.
+    fn encode_with_unchecked(&self, buffer: &mut BytesMut) -> [Bytes; N];
+
+    /// Encodes the object using a newly created buffer.
+    fn encode_to_bytes_vec(&self) -> [Bytes; N] {
+        let mut buffer = BytesMut::new();
+        self.encode_with_unchecked(&mut buffer) // BytesMut will grow as needed
+    }
+
+    /// Total length in bytes of all `Bytes` returned by [`Self::encode_with`].
+    fn total_length(&self) -> usize;
+
+    /// Required buffer capacity for the encoding.
+    fn required_capacity(&self) -> usize;
+}
+
+impl<T: WireEncode> WireEncodeVec<1> for T {
+    type Error = <T as WireEncode>::Error;
+
+    fn encode_with_unchecked(&self, buffer: &mut BytesMut) -> [Bytes; 1] {
+        self.encode_to_unchecked(buffer);
+        [buffer.split().freeze()]
+    }
+
+    #[inline]
+    fn total_length(&self) -> usize {
+        self.encoded_length()
+    }
+
+    #[inline]
+    fn required_capacity(&self) -> usize {
+        self.encoded_length()
+    }
+}
+
+impl WireEncode for &[u8] {
+    type Error = InadequateBufferSize;
+
+    #[inline]
+    fn encoded_length(&self) -> usize {
+        self.len()
+    }
+
+    #[inline]
+    fn encode_to_unchecked<T: BufMut>(&self, buffer: &mut T) {
+        buffer.put_slice(self)
     }
 }
 
@@ -111,6 +246,12 @@ macro_rules! bounded_uint {
             #[inline]
             pub const fn get(&self) -> $type {
                 self.0
+            }
+        }
+
+        impl From<$type> for $name {
+            fn from(value: $type) -> Self {
+                Self::new_unchecked(value)
             }
         }
     };

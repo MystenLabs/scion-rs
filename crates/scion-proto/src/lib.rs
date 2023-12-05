@@ -1,4 +1,5 @@
 pub mod address;
+pub mod datagram;
 pub mod packet;
 pub mod path;
 pub mod reliable;

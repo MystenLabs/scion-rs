@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 bytes = { workspace = true }
-chrono = { version = "0.4.31", default-features = false }
+chrono = { workspace = true }
 scion-grpc = { workspace = true }
 serde = { version = "1.0.188", features = ["derive"] }
 thiserror = { workspace = true }

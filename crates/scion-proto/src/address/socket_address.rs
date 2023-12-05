@@ -5,6 +5,7 @@ use std::{
 };
 
 use super::{error::AddressKind, AddressParseError, Host, IsdAsn, ServiceAddress};
+use crate::packet::AddressInfo;
 
 /// A SCION socket address.
 ///
@@ -85,6 +86,15 @@ impl SocketAddr {
             Self::V4(addr) => addr.port(),
             Self::V6(addr) => addr.port(),
             Self::Svc(addr) => addr.port(),
+        }
+    }
+
+    /// Returns the address info corresponding to the socket address's address type.
+    pub const fn address_info(&self) -> AddressInfo {
+        match self {
+            SocketAddr::V4(_) => AddressInfo::IPV4,
+            SocketAddr::V6(_) => AddressInfo::IPV6,
+            SocketAddr::Svc(_) => AddressInfo::SERVICE,
         }
     }
 

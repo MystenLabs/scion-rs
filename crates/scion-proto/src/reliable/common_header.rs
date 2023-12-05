@@ -4,7 +4,11 @@ use bytes::{Buf, BufMut};
 use thiserror::Error;
 
 use super::{wire_utils::encoded_address_and_port_length, ADDRESS_TYPE_OCTETS};
-use crate::address::{HostAddress, HostType};
+use crate::{
+    address::{HostAddress, HostType},
+    packet::InadequateBufferSize,
+    wire_encoding::WireEncode,
+};
 
 /// Errors occurring during decoding of packets received over the reliable-relay protocol.
 #[derive(Error, Debug, Eq, PartialEq, Clone, Copy)]
@@ -139,39 +143,6 @@ impl CommonHeader {
             .expect("at least 32-bit architecture")
     }
 
-    /// The number of bytes in the encoded common header.
-    pub fn encoded_length(&self) -> usize {
-        Self::MIN_LENGTH + encoded_address_and_port_length(self.destination.host_address_type())
-    }
-
-    /// Serialize a common header to the provided buffer.
-    ///
-    /// The resulting header is suitable for being written to the network
-    /// ahead of the payload.
-    ///
-    /// # Panic
-    ///
-    /// Panics if the the buffer is too small to contain the header.
-    pub fn encode_to(&self, buffer: &mut impl BufMut) {
-        let initial_remaining = buffer.remaining_mut();
-
-        buffer.put_u64(Self::COOKIE);
-        buffer.put_u8(self.destination.host_address_type().into());
-        buffer.put_u32(self.payload_length);
-
-        if let Some(destination) = self.destination.as_ref() {
-            match destination.ip() {
-                IpAddr::V4(ipv4) => buffer.put(ipv4.octets().as_slice()),
-                IpAddr::V6(ipv6) => buffer.put(ipv6.octets().as_slice()),
-            }
-
-            buffer.put_u16(destination.port());
-        }
-
-        let bytes_consumed = initial_remaining - buffer.remaining_mut();
-        assert_eq!(bytes_consumed, self.encoded_length());
-    }
-
     /// Decodes either a partial or full common header from the provided
     /// buffer.
     ///
@@ -192,6 +163,43 @@ impl CommonHeader {
         } else {
             Ok(DecodedHeader::Partial(partial_header))
         }
+    }
+}
+
+impl WireEncode for CommonHeader {
+    type Error = InadequateBufferSize;
+
+    /// The number of bytes in the encoded common header.
+    fn encoded_length(&self) -> usize {
+        Self::MIN_LENGTH + encoded_address_and_port_length(self.destination.host_address_type())
+    }
+
+    /// Serialize a common header to the provided buffer.
+    ///
+    /// The resulting header is suitable for being written to the network
+    /// ahead of the payload.
+    ///
+    /// # Panic
+    ///
+    /// Panics if the the buffer is too small to contain the header.
+    fn encode_to_unchecked<T: BufMut>(&self, buffer: &mut T) {
+        let initial_remaining = buffer.remaining_mut();
+
+        buffer.put_u64(Self::COOKIE);
+        buffer.put_u8(self.destination.host_address_type().into());
+        buffer.put_u32(self.payload_length);
+
+        if let Some(destination) = self.destination.as_ref() {
+            match destination.ip() {
+                IpAddr::V4(ipv4) => buffer.put(ipv4.octets().as_slice()),
+                IpAddr::V6(ipv6) => buffer.put(ipv6.octets().as_slice()),
+            }
+
+            buffer.put_u16(destination.port());
+        }
+
+        let bytes_consumed = initial_remaining - buffer.remaining_mut();
+        assert_eq!(bytes_consumed, self.encoded_length());
     }
 }
 
@@ -218,7 +226,7 @@ mod tests {
                         destination: address,
                         payload_length: $payload_length,
                     }
-                    .encode_to(&mut buffer);
+                    .encode_to_unchecked(&mut buffer);
 
                     assert_eq!(buffer.as_ref(), $expected_bytes);
                 }

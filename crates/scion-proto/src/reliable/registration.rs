@@ -29,6 +29,7 @@ use bytes::{Buf, BufMut};
 use super::wire_utils::LAYER4_PORT_OCTETS;
 use crate::{
     address::{HostAddress, IsdAsn, ServiceAddress, SocketAddr as ScionSocketAddr},
+    datagram::UdpDatagram,
     reliable::{
         wire_utils::{encoded_address_and_port_length, encoded_address_length},
         ADDRESS_TYPE_OCTETS,
@@ -81,11 +82,9 @@ impl RegistrationRequest {
     pub fn encode_to(&self, buffer: &mut impl BufMut) {
         let initial_remaining = buffer.remaining_mut();
 
-        const UDP_PROTOCOL_NUMBER: u8 = 17;
-
         self.encode_command_flag(buffer);
 
-        buffer.put_u8(UDP_PROTOCOL_NUMBER);
+        buffer.put_u8(UdpDatagram::PROTOCOL_NUMBER);
         buffer.put_u64(self.isd_asn.as_u64());
 
         encode_address(buffer, &self.public_address);

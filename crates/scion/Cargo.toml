@@ -6,8 +6,9 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-bytes = { workspace = true }
-scion-grpc = { workspace = true }
+bytes = "1.5.0"
+chrono = { workspace = true, features = ["clock"] }
+scion-grpc = { version = "0.1.0", path = "../scion-grpc" }
 scion-proto = { version = "0.1.0", path = "../scion-proto" }
 thiserror = { workspace = true }
 tokio = { version = "1.34.0", features = ["rt-multi-thread", "macros"] }
