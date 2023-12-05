@@ -54,7 +54,8 @@ Other valid output formats are `json`, `stdout`, `xml`, and `lcov`.
 ## Integration tests
 
 Most integration tests are disabled by default because they depend on certain running SCION applications.
-You can run the full test suite (including integration tests) by executing `cargo test -- --ignored`.
+You can run the integration tests by executing `cargo test -- --ignored` or the full test suite (unit and integration
+tests) through `cargo test -- --include-ignored`.
 
 Some integration tests allow you to control addresses of SCION components and other data through environment variables.
 For example, if your SCION Daemon is accessible at `192.168.0.42:12345` instead of the default `localhost:30255`, you
@@ -64,11 +65,7 @@ can run integration tests like this:
 SCION_DAEMON_ADDRESS="http://192.168.0.42:12345" cargo test -- --ignored
 ```
 
-To run both unit and integration tests, run
-
-```sh
-cargo test -- --include-ignored
-```
+For the integration tests, we use the
 
 ### Local SCION topology with multipass
 

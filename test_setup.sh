@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# This script assumes you have set up multipass as described in CONTRIBUTING.md
+# and the SCION VM is running.
+#
+# Usage: . ./test_setup.sh
 
 VM_ADDRESS=$(multipass info scion | awk '/IPv4/{print $2}')
 ssh ubuntu@$VM_ADDRESS << 'EOF'
