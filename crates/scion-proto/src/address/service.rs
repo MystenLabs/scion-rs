@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use super::{error::AddressKind, AddressParseError, Host, HostAddress, HostType};
+use super::{error::AddressKind, AddressParseError, HostAddr, HostType};
 
 /// A SCION service address.
 ///
@@ -107,9 +107,15 @@ impl From<ServiceAddress> for u16 {
     }
 }
 
-impl From<ServiceAddress> for Host {
+impl From<ServiceAddress> for HostAddr {
     fn from(value: ServiceAddress) -> Self {
-        Host::Svc(value)
+        HostAddr::Svc(value)
+    }
+}
+
+impl From<ServiceAddress> for HostType {
+    fn from(_: ServiceAddress) -> Self {
+        HostType::Svc
     }
 }
 
@@ -127,12 +133,6 @@ impl Display for ServiceAddress {
         }
 
         Ok(())
-    }
-}
-
-impl HostAddress for ServiceAddress {
-    fn host_address_type(&self) -> HostType {
-        HostType::Svc
     }
 }
 

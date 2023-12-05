@@ -1,10 +1,8 @@
-use std::net::{Ipv4Addr, Ipv6Addr};
-
 use bytes::{Buf, BufMut};
 
 use super::AddressInfo;
 use crate::{
-    address::{Host, HostType, IsdAsn, ServiceAddress, SocketAddr},
+    address::{HostAddr, HostType, IsdAsn, ServiceAddress, SocketAddr},
     packet::{ByEndpoint, DecodeError, InadequateBufferSize},
     wire_encoding::{MaybeEncoded, WireDecodeWithContext, WireEncode},
 };
@@ -23,14 +21,14 @@ pub struct AddressHeader {
     /// The ISD-AS numbers of the source and destination hosts.
     pub ia: ByEndpoint<IsdAsn>,
     /// The host addresses of the source and destination.
-    pub host: ByEndpoint<MaybeEncoded<Host, (AddressInfo, RawHostAddress)>>,
+    pub host: ByEndpoint<MaybeEncoded<HostAddr, (AddressInfo, RawHostAddress)>>,
 }
 
 impl AddressHeader {
     const BASE_LENGTH: usize = 2 * core::mem::size_of::<u64>();
 
     /// Creates a new AddressHeader with the specified ISD-AS numbers and hosts.
-    pub fn new(ia: ByEndpoint<IsdAsn>, host: ByEndpoint<Host>) -> Self {
+    pub fn new(ia: ByEndpoint<IsdAsn>, host: ByEndpoint<HostAddr>) -> Self {
         Self {
             ia,
             host: ByEndpoint {
@@ -94,7 +92,7 @@ impl WireEncode for AddressHeader {
     }
 }
 
-impl WireEncode for MaybeEncoded<Host, (AddressInfo, RawHostAddress)> {
+impl WireEncode for MaybeEncoded<HostAddr, (AddressInfo, RawHostAddress)> {
     type Error = InadequateBufferSize;
 
     fn encoded_length(&self) -> usize {
@@ -107,9 +105,9 @@ impl WireEncode for MaybeEncoded<Host, (AddressInfo, RawHostAddress)> {
     fn encode_to_unchecked<T: BufMut>(&self, buffer: &mut T) {
         match self {
             MaybeEncoded::Decoded(host_addr) => match host_addr {
-                Host::Ip(std::net::IpAddr::V4(addr)) => buffer.put_slice(&addr.octets()),
-                Host::Ip(std::net::IpAddr::V6(addr)) => buffer.put_slice(&addr.octets()),
-                Host::Svc(addr) => {
+                HostAddr::V4(addr) => buffer.put_slice(&addr.octets()),
+                HostAddr::V6(addr) => buffer.put_slice(&addr.octets()),
+                HostAddr::Svc(addr) => {
                     buffer.put_u16((*addr).into());
                     buffer.put_u16(0);
                 }
@@ -124,7 +122,7 @@ impl WireEncode for MaybeEncoded<Host, (AddressInfo, RawHostAddress)> {
 fn maybe_decode_host<T>(
     data: &mut T,
     info: AddressInfo,
-) -> Result<MaybeEncoded<Host, (AddressInfo, RawHostAddress)>, DecodeError>
+) -> Result<MaybeEncoded<HostAddr, (AddressInfo, RawHostAddress)>, DecodeError>
 where
     T: Buf,
 {
@@ -135,10 +133,10 @@ where
     Ok(match info.host_type() {
         MaybeEncoded::Decoded(host_type) => MaybeEncoded::Decoded(match host_type {
             HostType::None => unreachable!("AddressInfo never returns None host type"),
-            HostType::Ipv4 => Host::Ip(Ipv4Addr::from(data.get_u32()).into()),
-            HostType::Ipv6 => Host::Ip(Ipv6Addr::from(data.get_u128()).into()),
+            HostType::Ipv4 => HostAddr::V4(data.get_u32().into()),
+            HostType::Ipv6 => HostAddr::V6(data.get_u128().into()),
             HostType::Svc => {
-                let address = Host::Svc(ServiceAddress(data.get_u16()));
+                let address = HostAddr::Svc(ServiceAddress(data.get_u16()));
                 // Remove service address's 2-byte padding
                 let _ = data.get_u16();
 
@@ -239,8 +237,8 @@ mod tests {
 
     test_encode_decode! {
         name: ipv4_to_ipv4,
-        destination: {ia: "1-ff00:0:ab", host: Host::Ip("10.0.0.1".parse()?)},
-        source: {ia: "1-ff00:0:cd", host: Host::Ip("192.168.0.1".parse()?)},
+        destination: {ia: "1-ff00:0:ab", host: HostAddr::V4("10.0.0.1".parse()?)},
+        source: {ia: "1-ff00:0:cd", host: HostAddr::V4("192.168.0.1".parse()?)},
         encoded: &[
             0, 1, 0xff, 0, 0, 0, 0, 0xab,
             0, 1, 0xff, 0, 0, 0, 0, 0xcd,
@@ -250,8 +248,8 @@ mod tests {
 
     test_encode_decode! {
         name: ipv6_to_service,
-        destination: {ia: "31-ff00:96:0", host: Host::Svc(ServiceAddress::DAEMON.multicast())},
-        source: {ia: "47-ff13:0:cd", host: Host::Ip("2001:0db8:ac10:fe01::".parse()?)},
+        destination: {ia: "31-ff00:96:0", host: HostAddr::Svc(ServiceAddress::DAEMON.multicast())},
+        source: {ia: "47-ff13:0:cd", host: HostAddr::V6("2001:0db8:ac10:fe01::".parse()?)},
         encoded: &[
             0, 31, 0xff, 0, 0, 0x96, 0, 0,
             0, 47, 0xff, 0x13, 0, 0, 0, 0xcd,

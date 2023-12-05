@@ -11,7 +11,7 @@ mod service;
 pub use service::ServiceAddress;
 
 mod host;
-pub use host::{Host, HostAddress, HostType};
+pub use host::{HostAddr, HostType};
 
 mod socket_address;
 pub use socket_address::{SocketAddr, SocketAddrSvc, SocketAddrV4, SocketAddrV6};

@@ -1,14 +1,37 @@
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use super::ServiceAddress;
 
 /// The AS-local host identifier of a SCION address.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Host {
-    /// An IPv4 or IPv6 host address
-    Ip(IpAddr),
+pub enum HostAddr {
+    /// An IPv4 host address
+    V4(Ipv4Addr),
+    /// An IPv6 host address
+    V6(Ipv6Addr),
     /// A SCION-service host address
     Svc(ServiceAddress),
+}
+
+impl From<Ipv4Addr> for HostAddr {
+    fn from(value: Ipv4Addr) -> Self {
+        HostAddr::V4(value)
+    }
+}
+
+impl From<Ipv6Addr> for HostAddr {
+    fn from(value: Ipv6Addr) -> Self {
+        HostAddr::V6(value)
+    }
+}
+
+impl From<IpAddr> for HostAddr {
+    fn from(value: IpAddr) -> Self {
+        match value {
+            IpAddr::V4(addr) => HostAddr::V4(addr),
+            IpAddr::V6(addr) => HostAddr::V6(addr),
+        }
+    }
 }
 
 /// Enum to discriminate among different types of Host addresses.
@@ -51,62 +74,29 @@ impl From<HostType> for u8 {
     }
 }
 
-/// Trait to be implemented by address types that are supported by SCION
-/// as valid AS-host addresses.
-pub trait HostAddress {
-    /// Return the HostType associated with the host address
-    fn host_address_type(&self) -> HostType;
-}
-
-impl HostAddress for SocketAddr {
-    fn host_address_type(&self) -> HostType {
-        self.ip().host_address_type()
-    }
-}
-
-impl HostAddress for IpAddr {
-    fn host_address_type(&self) -> HostType {
-        match self {
+impl From<IpAddr> for HostType {
+    fn from(value: IpAddr) -> Self {
+        match value {
             IpAddr::V4(_) => HostType::Ipv4,
             IpAddr::V6(_) => HostType::Ipv6,
         }
     }
 }
 
-impl HostAddress for Host {
-    fn host_address_type(&self) -> HostType {
-        match self {
-            Host::Ip(ip_address) => ip_address.host_address_type(),
-            Host::Svc(service_address) => service_address.host_address_type(),
-        }
+impl From<Ipv4Addr> for HostType {
+    fn from(_: Ipv4Addr) -> Self {
+        HostType::Ipv4
     }
 }
 
-impl<T> HostAddress for Option<T>
-where
-    T: HostAddress,
-{
-    fn host_address_type(&self) -> HostType {
-        self.as_ref()
-            .map(HostAddress::host_address_type)
-            .unwrap_or(HostType::None)
+impl From<Ipv6Addr> for HostType {
+    fn from(_: Ipv6Addr) -> Self {
+        HostType::Ipv6
     }
 }
 
-impl From<IpAddr> for Host {
-    fn from(value: IpAddr) -> Self {
-        Host::Ip(value)
-    }
-}
-
-impl From<Ipv4Addr> for Host {
-    fn from(value: Ipv4Addr) -> Self {
-        Host::Ip(value.into())
-    }
-}
-
-impl From<Ipv6Addr> for Host {
-    fn from(value: Ipv6Addr) -> Self {
-        Host::Ip(value.into())
+impl<T: Into<HostType>> From<Option<T>> for HostType {
+    fn from(value: Option<T>) -> Self {
+        value.map(Into::into).unwrap_or(HostType::None)
     }
 }
