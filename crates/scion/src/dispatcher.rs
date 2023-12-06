@@ -33,6 +33,19 @@ const RECV_BUFFER_LEN: usize = 1024 * 1024; // 1 MiB;
 // This means that the logic for resetting the BytesMut is triggered only once every ~30 packets.
 const SEND_BUFFER_LEN: usize = 1024;
 
+/// The default file path of the dispatcher socket.
+pub const DEFAULT_DISPATCHER_PATH: &str = "/run/shm/dispatcher/default.sock";
+
+/// The environment variable to configure the path of the dispatcher socket.
+pub const DISPATCHER_PATH_ENV_VARIABLE: &str = "SCION_DISPATCHER_PATH";
+
+/// Get the dispatcher path.
+///
+/// Depending on the environment, this is the [`DEFAULT_DISPATCHER_PATH`] or manually configured
+pub fn get_dispatcher_path() -> String {
+    std::env::var(DISPATCHER_PATH_ENV_VARIABLE).unwrap_or(DEFAULT_DISPATCHER_PATH.to_string())
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum RegistrationError {
     #[error("an invalid registration address was provided")]

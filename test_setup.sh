@@ -13,7 +13,7 @@ ssh ubuntu@$VM_ADDRESS << 'EOF'
         -j DNAT --to $DAEMON_ADDRESS_111
 EOF
 DAEMON_PORT=$(ssh ubuntu@$VM_ADDRESS 'cd scion; ./scion.sh sciond-addr 111 | cut -d ":" -f 2')
-export SCION_DISPATCHER_SOCKET=/tmp/dispatcher.sock
-export DAEMON_ADDRESS="[$VM_ADDRESS]:$DAEMON_PORT"
-rm -f $SCION_DISPATCHER_SOCKET
-ssh ubuntu@$VM_ADDRESS -fN -L $SCION_DISPATCHER_SOCKET:/run/shm/dispatcher/default.sock
+export SCION_DISPATCHER_PATH=/tmp/dispatcher.sock
+export SCION_DAEMON_ADDRESS="[$VM_ADDRESS]:$DAEMON_PORT"
+rm -f $SCION_DISPATCHER_PATH
+ssh ubuntu@$VM_ADDRESS -fN -L $SCION_DISPATCHER_PATH:/run/shm/dispatcher/default.sock

@@ -104,7 +104,7 @@ jobs:
 
       - name: Run tests (including integration tests) and record coverage
         run: >
-          DAEMON_ADDRESS=${{ steps.scion.outputs.daemon-address-as111 }}
+          SCION_DAEMON_ADDRESS=${{ steps.scion.outputs.daemon-address-as111 }}
           cargo tarpaulin --workspace --skip-clean
           --lib --bins --examples --tests --doc
           --out html --out xml

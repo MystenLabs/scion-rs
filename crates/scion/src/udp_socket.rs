@@ -12,10 +12,7 @@ use scion_proto::{
 };
 use tokio::sync::Mutex;
 
-use crate::{
-    dispatcher::{self, DispatcherStream, RegistrationError},
-    DEFAULT_DISPATCHER_PATH,
-};
+use crate::dispatcher::{self, get_dispatcher_path, DispatcherStream, RegistrationError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectError {
@@ -76,7 +73,7 @@ pub struct UdpSocket {
 
 impl UdpSocket {
     pub async fn bind(address: SocketAddr) -> Result<Self, ConnectError> {
-        Self::bind_with_dispatcher(address, DEFAULT_DISPATCHER_PATH).await
+        Self::bind_with_dispatcher(address, get_dispatcher_path()).await
     }
 
     pub async fn bind_with_dispatcher<P: AsRef<std::path::Path> + std::fmt::Debug>(
