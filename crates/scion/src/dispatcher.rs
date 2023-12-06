@@ -22,6 +22,9 @@ use tokio::{
     net::UnixStream,
 };
 
+/// Underlay port on which the dispatcher receives packets from the network.
+pub const UNDERLAY_PORT: u16 = 30041;
+
 // Recv buffer to 1 MiB
 // TODO(jsmith): Allow the user to set this
 const RECV_BUFFER_LEN: usize = 1024 * 1024; // 1 MiB;

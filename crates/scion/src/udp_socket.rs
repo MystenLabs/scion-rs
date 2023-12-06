@@ -37,6 +37,8 @@ pub enum SendError {
     NoRemoteAddress,
     #[error("path is not set")]
     NoPath,
+    #[error("no underlay next hop provided by path")]
+    NoUnderlayNextHop,
 }
 
 impl From<dispatcher::SendError> for SendError {
@@ -225,7 +227,17 @@ impl UdpSocketInner {
             }
         }
 
-        let relay = path.underlay_next_hop;
+        let relay = if path.underlay_next_hop.is_some() {
+            path.underlay_next_hop
+        } else if endhosts.source.isd_asn() == endhosts.destination.isd_asn() {
+            endhosts.destination.local_address().map(|mut socket_addr| {
+                socket_addr.set_port(dispatcher::UNDERLAY_PORT);
+                socket_addr
+            })
+        } else {
+            return Err(SendError::NoUnderlayNextHop);
+        };
+
         let packet = ScionPacketUdp::new(endhosts, path, payload)?;
 
         self.state
@@ -297,7 +309,7 @@ impl UdpSocketInner {
 
         let payload_len = udp_datagram.payload.len();
         let copy_length = cmp::min(payload_len, buf.len());
-        buf.copy_from_slice(&udp_datagram.payload[..copy_length]);
+        buf[..copy_length].copy_from_slice(&udp_datagram.payload[..copy_length]);
 
         Some((payload_len, source, path))
     }
