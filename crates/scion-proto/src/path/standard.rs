@@ -34,7 +34,7 @@ impl SegmentLength {
 }
 
 wire_encoding::bounded_uint! {
-    /// A 6-bit reserved field withiin the [`PathMetaHeader`].
+    /// A 6-bit reserved field within the [`PathMetaHeader`].
     #[derive(Default)]
     pub struct PathMetaReserved(u8 : 6);
 }

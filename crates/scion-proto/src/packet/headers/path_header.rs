@@ -142,3 +142,61 @@ impl WireDecodeWithContext<Bytes> for DataplanePath {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use bytes::BytesMut;
+
+    use super::*;
+
+    #[test]
+    fn path_type_consistent() {
+        for value in 0..u8::MAX {
+            assert_eq!(u8::from(PathType::from(value)), value);
+        }
+    }
+
+    macro_rules! test_path_create_encode_decode {
+        ($name:ident, $dataplane_path:expr, $expected_length:expr) => {
+            #[test]
+            fn $name() -> Result<(), Box<dyn std::error::Error>> {
+                let dataplane_path: DataplanePath = $dataplane_path;
+                let mut encoded_path = dataplane_path.encode_to_bytes();
+
+                assert_eq!(dataplane_path.encoded_length(), $expected_length);
+                assert_eq!(encoded_path.len(), $expected_length);
+
+                assert_eq!(dataplane_path.deep_copy(), dataplane_path);
+
+                assert_eq!(
+                    DataplanePath::decode_with_context(
+                        &mut encoded_path,
+                        (dataplane_path.path_type(), $expected_length)
+                    )?,
+                    dataplane_path
+                );
+                Ok(())
+            }
+        };
+    }
+
+    test_path_create_encode_decode!(empty, DataplanePath::EmptyPath, 0);
+    test_path_create_encode_decode!(
+        other,
+        DataplanePath::Unsupported {
+            path_type: PathType::Colibri,
+            bytes: Bytes::from_static(&[1, 2, 3, 4])
+        },
+        4
+    );
+    test_path_create_encode_decode!(
+        standard,
+        {
+            let mut path_raw = BytesMut::with_capacity(36);
+            path_raw.put_u32(0x0000_2000);
+            path_raw.put_slice(&[0_u8; 32]);
+            DataplanePath::Standard(StandardPath::decode(&mut path_raw.freeze()).unwrap())
+        },
+        36
+    );
+}

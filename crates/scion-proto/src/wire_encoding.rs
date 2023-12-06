@@ -257,3 +257,45 @@ macro_rules! bounded_uint {
     };
 }
 pub(crate) use bounded_uint;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static BYTES: Bytes = Bytes::from_static(&[0, 1, 2, 3]);
+
+    #[test]
+    fn bytes_encoding() {
+        let b = BYTES.clone();
+        let mut buffer = BytesMut::new();
+        assert!(b.encode_to(&mut buffer).is_ok());
+        assert_eq!(b, buffer.split().freeze());
+        assert_eq!(b, b.encode_to_bytes());
+        assert_eq!(b.encoded_length(), 4);
+        assert_eq!(b.encoded_length(), b.encode_to_bytes().len());
+    }
+
+    #[test]
+    fn bytes_encoding_vec() {
+        assert_eq!([BYTES.clone()], BYTES.clone().encode_to_bytes_vec());
+        assert_eq!(BYTES.clone().required_capacity(), 4);
+        assert_eq!(BYTES.clone().total_length(), 4);
+        assert_eq!(BYTES.clone().encode_to_bytes_vec()[0].len(), 4);
+    }
+
+    #[test]
+    #[should_panic]
+    fn bytes_encoding_unchecked_failure() {
+        let mut buffer = [0_u8; 1];
+        BYTES.encode_to_unchecked(&mut buffer.as_mut());
+    }
+
+    #[test]
+    fn bytes_encoding_failure() {
+        let mut buffer = [0_u8; 1];
+        assert_eq!(
+            BYTES.clone().encode_to(&mut buffer.as_mut()),
+            Err(InadequateBufferSize)
+        );
+    }
+}
