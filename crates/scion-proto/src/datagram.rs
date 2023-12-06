@@ -25,7 +25,7 @@ pub enum UdpEncodeError {
 /// the [RFC].
 ///
 /// [RFC]: https://www.ietf.org/archive/id/draft-dekater-scion-dataplane-00.html
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct UdpDatagram {
     /// The source and destination ports
     pub port: ByEndpoint<u16>,
@@ -131,5 +131,63 @@ where
         } else {
             Err(Self::Error::DatagramEmptyOrTruncated)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{net::Ipv4Addr, str::FromStr};
+
+    use super::*;
+    use crate::{address::IsdAsn, wire_encoding::MaybeEncoded};
+
+    #[test]
+    fn create_encode_decode() -> Result<(), Box<dyn std::error::Error>> {
+        let payload = Bytes::from_static(&[1, 2, 3, 4]);
+        let address_header = AddressHeader {
+            ia: ByEndpoint {
+                source: IsdAsn::from_str("1-1")?,
+                destination: IsdAsn::from_str("1-2")?,
+            },
+            host: ByEndpoint {
+                source: MaybeEncoded::Decoded(Ipv4Addr::from_str("10.0.0.1")?.into()),
+                destination: MaybeEncoded::Decoded(Ipv4Addr::from_str("10.0.0.2")?.into()),
+            },
+        };
+        let mut datagram = UdpDatagram::new(
+            ByEndpoint {
+                source: 10001,
+                destination: 10002,
+            },
+            payload.clone(),
+        )?;
+        datagram.set_checksum(&address_header);
+        let expected_length = 8 + 4;
+        let expected_header = [
+            (10001 >> 8) as u8,
+            (10001 & 0xff) as u8,
+            (10002 >> 8) as u8,
+            (10002 & 0xff) as u8,
+            0,
+            expected_length.try_into()?,
+            (datagram.checksum >> 8) as u8,
+            (datagram.checksum & 0xff) as u8,
+        ];
+
+        assert!(datagram.verify_checksum(&address_header));
+
+        let encoded_datagram = datagram.encode_to_bytes_vec();
+        assert_eq!(datagram.total_length(), expected_length);
+        assert_eq!(
+            encoded_datagram,
+            [Bytes::copy_from_slice(&expected_header[..]), payload]
+        );
+
+        let mut encoded_bytes = BytesMut::new();
+        encoded_bytes.put(encoded_datagram[0].clone());
+        encoded_bytes.put(encoded_datagram[1].clone());
+        assert_eq!(UdpDatagram::decode(&mut encoded_bytes.freeze())?, datagram);
+
+        Ok(())
     }
 }
