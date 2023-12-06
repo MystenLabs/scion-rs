@@ -1,5 +1,5 @@
 mod messages;
 pub use messages::{AsInfo, PathRequest};
 
-mod client;
-pub use client::{DaemonClient, DaemonClientError};
+pub mod client;
+pub use client::{get_daemon_address, DaemonClient, DaemonClientError};

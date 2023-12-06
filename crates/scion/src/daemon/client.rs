@@ -1,3 +1,5 @@
+use std::env;
+
 use scion_grpc::daemon::{v1 as daemon_grpc, v1::daemon_service_client::DaemonServiceClient};
 use scion_proto::{address::IsdAsn, packet::ByEndpoint, path::Path};
 use thiserror::Error;
@@ -17,6 +19,24 @@ pub enum DaemonClientError {
     GrpcError(#[from] tonic::Status),
     #[error("Response contained invalid data")]
     InvalidData,
+}
+
+/// The default address of the SCION daemon.
+pub const DEFAULT_DAEMON_ADDRESS: &str = "https://localhost:30255";
+
+/// The environment variable to configure the address of the SCION daemon.
+pub const DAEMON_ADDRESS_ENV_VARIABLE: &str = "SCION_DAEMON_ADDRESS";
+
+/// Get the daemon address.
+///
+/// Depending on the environment, this is the [`DEFAULT_DAEMON_ADDRESS`] or manually configured
+pub fn get_daemon_address() -> String {
+    let mut address =
+        env::var(DAEMON_ADDRESS_ENV_VARIABLE).unwrap_or(DEFAULT_DAEMON_ADDRESS.into());
+    if !address.contains("://") {
+        address = format!("http://{}", address);
+    }
+    address
 }
 
 /// A service to communicate with the local SCION daemon

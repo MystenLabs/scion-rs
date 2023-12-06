@@ -61,7 +61,7 @@ For example, if your SCION Daemon is accessible at `192.168.0.42:12345` instead 
 can run integration tests like this:
 
 ```sh
-DAEMON_ADDRESS="http://192.168.0.42:12345" cargo test -- --ignored
+SCION_DAEMON_ADDRESS="http://192.168.0.42:12345" cargo test -- --ignored
 ```
 
 To run both unit and integration tests, run

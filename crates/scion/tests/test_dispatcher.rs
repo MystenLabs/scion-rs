@@ -1,14 +1,7 @@
-use std::error::Error;
-
-use scion::dispatcher::{DispatcherStream, RegistrationError};
+use scion::dispatcher::{get_dispatcher_path, DispatcherStream, RegistrationError};
 use scion_proto::address::SocketAddr;
 
-type TestError = Result<(), Box<dyn Error>>;
-
-fn get_dispatcher_path() -> String {
-    std::env::var("SCION_DISPATCHER_SOCKET")
-        .unwrap_or("/run/shm/dispatcher/default.sock".to_string())
-}
+type TestError = Result<(), Box<dyn std::error::Error>>;
 
 #[tokio::test]
 #[ignore = "requires dispatcher"]
