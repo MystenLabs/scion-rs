@@ -31,8 +31,6 @@ pub enum EncodeError {
     PayloadTooLarge,
     #[error("packet header is too large")]
     HeaderTooLarge,
-    #[error("header is not properly aligned")]
-    MisalignedHeader,
 }
 
 /// Raised if the buffer does not have sufficient capacity for encoding the SCION headers.

@@ -2,10 +2,10 @@ use std::num::NonZeroU8;
 
 use bytes::{Buf, BufMut};
 
-use super::path_header::{DataplanePath, PathType};
+use super::path_header::PathType;
 use crate::{
-    address::{Host, HostType, SocketAddr},
-    packet::{ByEndpoint, DecodeError, EncodeError, InadequateBufferSize},
+    address::{Host, HostType},
+    packet::{ByEndpoint, DecodeError, InadequateBufferSize},
     wire_encoding::{self, MaybeEncoded, WireDecode, WireEncode},
 };
 
@@ -91,38 +91,6 @@ impl CommonHeader {
     /// Minimum header length factor defined as 36 bytes / 4.
     const MIN_HEADER_LENGTH_FACTOR: u8 = 9;
 
-    pub fn new(
-        endhosts: &ByEndpoint<SocketAddr>,
-        path: &DataplanePath,
-        header_length: usize,
-        payload_length: usize,
-        next_header: u8,
-    ) -> Result<Self, EncodeError> {
-        if header_length % CommonHeader::HEADER_LENGTH_MULTIPLICAND != 0 {
-            return Err(EncodeError::MisalignedHeader);
-        }
-        let header_length_factor = NonZeroU8::new(
-            (header_length / CommonHeader::HEADER_LENGTH_MULTIPLICAND)
-                .try_into()
-                .map_err(|_| EncodeError::HeaderTooLarge)?,
-        )
-        .expect("cannot be 0");
-
-        Ok(Self {
-            version: Version::default(),
-            traffic_class: 0,
-            flow_id: Self::simple_flow_id(endhosts),
-            next_header,
-            header_length_factor,
-            payload_length: payload_length
-                .try_into()
-                .map_err(|_| EncodeError::PayloadTooLarge)?,
-            path_type: path.path_type(),
-            address_info: endhosts.map(SocketAddr::address_info),
-            reserved: 0,
-        })
-    }
-
     /// The total length of the entire SCION header
     ///
     /// Equivalent to 4 * [`Self::header_length_factor`].
@@ -140,13 +108,6 @@ impl CommonHeader {
     /// The payload length as a usize.
     pub fn payload_size(&self) -> usize {
         usize::try_from(self.payload_length).expect("usize to be larger than 16-bits")
-    }
-
-    // TODO(mlegner): More sophisticated flow ID?
-    /// Simple flow ID containing the XOR of source and destination port with a prepended 1
-    /// to prevent a value of 0.
-    fn simple_flow_id(endhosts: &ByEndpoint<SocketAddr>) -> FlowId {
-        (0x1_0000 | (endhosts.source.port() ^ endhosts.destination.port()) as u32).into()
     }
 }
 
