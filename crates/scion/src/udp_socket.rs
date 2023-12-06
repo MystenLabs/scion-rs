@@ -59,7 +59,6 @@ impl From<packet::EncodeError> for SendError {
     fn from(value: packet::EncodeError) -> Self {
         match value {
             EncodeError::PayloadTooLarge | EncodeError::HeaderTooLarge => Self::PacketTooLarge,
-            EncodeError::MisalignedHeader => panic!("this should never happen"),
         }
     }
 }

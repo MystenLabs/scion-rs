@@ -1,4 +1,6 @@
 mod common_header;
+use std::num::NonZeroU8;
+
 use bytes::BufMut;
 pub use common_header::{AddressInfo, CommonHeader, FlowId, Version};
 
@@ -31,19 +33,42 @@ impl ScionHeaders {
     ) -> Result<Self, EncodeError> {
         let address_header = AddressHeader::from(*endhosts);
 
+        let header_length = CommonHeader::LENGTH
+            + address_header.encoded_length()
+            + path.dataplane_path.encoded_length();
+        let header_length_factor = NonZeroU8::new(
+            (header_length / CommonHeader::HEADER_LENGTH_MULTIPLICAND)
+                .try_into()
+                .map_err(|_| EncodeError::HeaderTooLarge)?,
+        )
+        .expect("cannot be 0");
+
+        let common_header = CommonHeader {
+            version: Version::default(),
+            traffic_class: 0,
+            flow_id: Self::simple_flow_id(endhosts),
+            next_header,
+            header_length_factor,
+            payload_length: payload_length
+                .try_into()
+                .map_err(|_| EncodeError::PayloadTooLarge)?,
+            path_type: path.dataplane_path.path_type(),
+            address_info: endhosts.map(SocketAddr::address_info),
+            reserved: 0,
+        };
+
         Ok(Self {
-            common: CommonHeader::new(
-                endhosts,
-                &path.dataplane_path,
-                CommonHeader::LENGTH
-                    + address_header.encoded_length()
-                    + path.dataplane_path.encoded_length(),
-                payload_length,
-                next_header,
-            )?,
+            common: common_header,
             address: address_header,
             path: path.dataplane_path.clone(),
         })
+    }
+
+    // TODO(mlegner): More sophisticated flow ID?
+    /// Simple flow ID containing the XOR of source and destination port with a prepended 1
+    /// to prevent a value of 0.
+    fn simple_flow_id(endhosts: &ByEndpoint<SocketAddr>) -> FlowId {
+        (0x1_0000 | (endhosts.source.port() ^ endhosts.destination.port()) as u32).into()
     }
 }
 
@@ -94,5 +119,37 @@ impl<T> ByEndpoint<T> {
 impl<T: PartialEq> ByEndpoint<T> {
     pub fn are_equal(&self) -> bool {
         self.source == self.destination
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+    use crate::packet::headers::path_header::PathType;
+
+    #[test]
+    fn new_success() -> Result<(), Box<dyn std::error::Error>> {
+        let endpoints = ByEndpoint {
+            source: SocketAddr::from_str("[1-1,10.0.0.1]:10001").unwrap(),
+            destination: SocketAddr::from_str("[1-2,10.0.0.2]:10002").unwrap(),
+        };
+        let headers = ScionHeaders::new(
+            &endpoints,
+            &Path::empty(endpoints.map(SocketAddr::isd_asn)),
+            0,
+            0,
+        )?;
+        let common_header = headers.common;
+        assert_eq!(common_header.flow_id, 0x1_0003.into());
+        assert!(CommonHeader::SUPPORTED_VERSIONS
+            .iter()
+            .any(|v| v == &common_header.version));
+        assert_eq!(common_header.header_length_factor, 9.try_into().unwrap());
+        assert_eq!(common_header.path_type, PathType::Empty);
+        assert_eq!(common_header.remaining_header_length(), 24);
+        assert_eq!(common_header.payload_size(), 0);
+        Ok(())
     }
 }
