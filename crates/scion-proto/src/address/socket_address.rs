@@ -1,8 +1,5 @@
-use std::{
-    fmt::Display,
-    net::{Ipv4Addr, Ipv6Addr},
-    str::FromStr,
-};
+use core::{fmt::Display, str::FromStr};
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 use super::{error::AddressKind, AddressParseError, HostAddr, IsdAsn, ServiceAddress};
 use crate::packet::AddressInfo;
