@@ -23,6 +23,6 @@ runs:
     - name: Disable mandb
       run: sudo apt-get remove --purge man-db
       shell: bash
-    - name: Install protobuf
-      run: sudo apt-get install protobuf-compiler
+    - name: Install APT dependencies
+      run: sudo apt-get install protobuf-compiler libcurl4-openssl-dev
       shell: bash
