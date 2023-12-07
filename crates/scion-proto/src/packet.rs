@@ -14,7 +14,6 @@ pub use headers::{
     AddressInfo,
     ByEndpoint,
     CommonHeader,
-    DataplanePath,
     FlowId,
     RawHostAddress,
     ScionHeaders,

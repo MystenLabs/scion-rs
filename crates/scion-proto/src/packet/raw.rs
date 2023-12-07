@@ -6,7 +6,6 @@ use super::{
     AddressHeader,
     ByEndpoint,
     CommonHeader,
-    DataplanePath,
     DecodeError,
     EncodeError,
     InadequateBufferSize,
@@ -14,7 +13,7 @@ use super::{
 };
 use crate::{
     address::SocketAddr,
-    path::Path,
+    path::{DataplanePath, Path},
     wire_encoding::{WireDecode, WireDecodeWithContext, WireEncode, WireEncodeVec},
 };
 
