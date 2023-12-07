@@ -161,7 +161,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        address::{HostAddr, ServiceAddress},
+        address::{HostAddr, ServiceAddr},
         packet::ByEndpoint,
         wire_encoding::WireEncode,
     };
@@ -362,7 +362,7 @@ mod tests {
 
     test_checksum! {
         name: ipv4_to_svc,
-        destination: {ia: "1-ff00:0:112", host: HostAddr::Svc(ServiceAddress::CONTROL)},
+        destination: {ia: "1-ff00:0:112", host: HostAddr::Svc(ServiceAddr::CONTROL)},
         source: {ia: "1-ff00:0:110", host: HostAddr::V4("174.16.4.1".parse()?)},
         data: b"\0\0\xaa\xbb\xcc\xdd",
         protocol: 223u8,

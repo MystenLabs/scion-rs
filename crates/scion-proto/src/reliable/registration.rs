@@ -28,7 +28,7 @@ use bytes::{Buf, BufMut};
 
 use super::wire_utils::LAYER4_PORT_OCTETS;
 use crate::{
-    address::{HostType, IsdAsn, ServiceAddress, SocketAddr as ScionSocketAddr},
+    address::{HostType, IsdAsn, ServiceAddr, SocketAddr as ScionSocketAddr},
     datagram::UdpDatagram,
     reliable::{
         wire_utils::{encoded_address_and_port_length, encoded_address_length},
@@ -46,7 +46,7 @@ pub(super) struct RegistrationRequest {
     /// A separate "bind address", only used for logging by the dispatcher.
     pub bind_address: Option<SocketAddr>,
     /// The service to associate with
-    pub associated_service: Option<ServiceAddress>,
+    pub associated_service: Option<ServiceAddr>,
 }
 
 impl RegistrationRequest {
@@ -69,7 +69,7 @@ impl RegistrationRequest {
 
     /// Add the provided associated service address to the request.
     #[cfg(test)]
-    pub fn with_associated_service(mut self, address: ServiceAddress) -> Self {
+    pub fn with_associated_service(mut self, address: ServiceAddr) -> Self {
         self.associated_service = Some(address);
         self
     }
@@ -410,7 +410,7 @@ mod tests {
         test_successful!(
             public_ipv4_with_service,
             RegistrationRequest::new(parse!("1-ff00:0:1"), parse!("10.2.3.4:80"))
-                .with_associated_service(ServiceAddress::CONTROL),
+                .with_associated_service(ServiceAddr::CONTROL),
             [0x03, 17, 0, 1, 0xff, 0, 0, 0, 0, 0x01, 0, 80, 1, 10, 2, 3, 4, 0x00, 0x02]
         );
 
@@ -418,7 +418,7 @@ mod tests {
             with_bind_and_service,
             RegistrationRequest::new(parse!("1-ff00:0:1"), parse!("10.2.3.4:80"))
                 .with_bind_address(parse!("10.5.6.7:81"))
-                .with_associated_service(ServiceAddress::CONTROL),
+                .with_associated_service(ServiceAddr::CONTROL),
             [
                 0x07, 17, 0, 1, 0xff, 0, 0, 0, 0, 0x01, 0, 80, 1, 10, 2, 3, 4, 0, 81, 1, 10, 5, 6,
                 7, 0, 2
