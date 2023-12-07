@@ -13,13 +13,13 @@ use super::{error::AddressKind, AddressParseError, HostAddr, HostType};
 /// # Textual Representation
 ///
 /// Service addresses can also be represented as strings, for example CS and CS_A
-/// both represent the anycast service address ServiceAddress::CONTROL. The
+/// both represent the anycast service address ServiceAddr::CONTROL. The
 /// corresponding multicast service address would be CS_M.
 #[derive(Eq, PartialEq, Copy, Clone, Debug, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
-pub struct ServiceAddress(pub u16);
+pub struct ServiceAddr(pub u16);
 
-impl ServiceAddress {
+impl ServiceAddr {
     /// SCION daemon anycast service address (DS_A)
     pub const DAEMON: Self = Self(0x0001);
     /// SCION control-service anycast address (CS_A)
@@ -46,9 +46,9 @@ impl ServiceAddress {
     /// # Examples
     ///
     /// ```
-    /// # use scion_proto::address::ServiceAddress;
-    /// assert!(!ServiceAddress::DAEMON.is_multicast());
-    /// assert!(ServiceAddress::DAEMON.multicast().is_multicast());
+    /// # use scion_proto::address::ServiceAddr;
+    /// assert!(!ServiceAddr::DAEMON.is_multicast());
+    /// assert!(ServiceAddr::DAEMON.multicast().is_multicast());
     /// ```
     pub fn multicast(self) -> Self {
         Self(self.0 | Self::MULTICAST_FLAG)
@@ -59,9 +59,9 @@ impl ServiceAddress {
     /// # Examples
     ///
     /// ```
-    /// # use scion_proto::address::ServiceAddress;
-    /// assert!(ServiceAddress::DAEMON.multicast().anycast().is_anycast());
-    /// assert!(!ServiceAddress::DAEMON.multicast().anycast().is_multicast());
+    /// # use scion_proto::address::ServiceAddr;
+    /// assert!(ServiceAddr::DAEMON.multicast().anycast().is_anycast());
+    /// assert!(!ServiceAddr::DAEMON.multicast().anycast().is_multicast());
     /// ```
     pub fn anycast(self) -> Self {
         Self(self.0 & !Self::MULTICAST_FLAG)
@@ -72,25 +72,25 @@ impl ServiceAddress {
     /// # Examples
     ///
     /// ```
-    /// # use scion_proto::address::ServiceAddress;
-    /// assert!(ServiceAddress::DAEMON.is_anycast());
-    /// assert!(!ServiceAddress::DAEMON.multicast().is_anycast());
+    /// # use scion_proto::address::ServiceAddr;
+    /// assert!(ServiceAddr::DAEMON.is_anycast());
+    /// assert!(!ServiceAddr::DAEMON.multicast().is_anycast());
     /// ```
     pub fn is_anycast(&self) -> bool {
         (self.0 & Self::MULTICAST_FLAG) == 0
     }
 }
 
-impl FromStr for ServiceAddress {
+impl FromStr for ServiceAddr {
     type Err = AddressParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (service, suffix) = s.split_once('_').unwrap_or((s, "A"));
 
         let address = match service {
-            "CS" => ServiceAddress::CONTROL,
-            "DS" => ServiceAddress::DAEMON,
-            "Wildcard" => ServiceAddress::WILDCARD,
+            "CS" => ServiceAddr::CONTROL,
+            "DS" => ServiceAddr::DAEMON,
+            "Wildcard" => ServiceAddr::WILDCARD,
             _ => return Err(AddressKind::Service.into()),
         };
         match suffix {
@@ -101,31 +101,31 @@ impl FromStr for ServiceAddress {
     }
 }
 
-impl From<ServiceAddress> for u16 {
-    fn from(value: ServiceAddress) -> Self {
+impl From<ServiceAddr> for u16 {
+    fn from(value: ServiceAddr) -> Self {
         value.0
     }
 }
 
-impl From<ServiceAddress> for HostAddr {
-    fn from(value: ServiceAddress) -> Self {
+impl From<ServiceAddr> for HostAddr {
+    fn from(value: ServiceAddr) -> Self {
         HostAddr::Svc(value)
     }
 }
 
-impl From<ServiceAddress> for HostType {
-    fn from(_: ServiceAddress) -> Self {
+impl From<ServiceAddr> for HostType {
+    fn from(_: ServiceAddr) -> Self {
         HostType::Svc
     }
 }
 
-impl Display for ServiceAddress {
+impl Display for ServiceAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.anycast() {
-            ServiceAddress::DAEMON => write!(f, "DS")?,
-            ServiceAddress::CONTROL => write!(f, "CS")?,
-            ServiceAddress::WILDCARD => write!(f, "Wildcard")?,
-            ServiceAddress(value) => write!(f, "<SVC:{:#06x}>", value)?,
+            ServiceAddr::DAEMON => write!(f, "DS")?,
+            ServiceAddr::CONTROL => write!(f, "CS")?,
+            ServiceAddr::WILDCARD => write!(f, "Wildcard")?,
+            ServiceAddr(value) => write!(f, "<SVC:{:#06x}>", value)?,
         }
 
         if self.is_multicast() {
@@ -142,8 +142,8 @@ mod tests {
 
     #[test]
     fn set_multicast() {
-        assert!(!ServiceAddress::DAEMON.is_multicast());
-        assert!(ServiceAddress::DAEMON.multicast().is_multicast());
+        assert!(!ServiceAddr::DAEMON.is_multicast());
+        assert!(ServiceAddr::DAEMON.multicast().is_multicast());
     }
 
     mod parse {
@@ -153,27 +153,23 @@ mod tests {
             ($name:ident, $str:expr, $expected:expr) => {
                 #[test]
                 fn $name() {
-                    assert_eq!(ServiceAddress::from_str($str).unwrap(), $expected);
+                    assert_eq!(ServiceAddr::from_str($str).unwrap(), $expected);
                 }
             };
         }
 
-        test_success!(control, "CS_A", ServiceAddress::CONTROL);
-        test_success!(control_shorthand, "CS", ServiceAddress::CONTROL);
-        test_success!(daemon, "DS_A", ServiceAddress::DAEMON);
-        test_success!(daemon_shorthand, "DS", ServiceAddress::DAEMON);
-        test_success!(wildcard, "Wildcard_A", ServiceAddress::WILDCARD);
-        test_success!(wildcard_shorthand, "Wildcard", ServiceAddress::WILDCARD);
-        test_success!(
-            control_multicast,
-            "CS_M",
-            ServiceAddress::CONTROL.multicast()
-        );
-        test_success!(daemon_multicast, "DS_M", ServiceAddress::DAEMON.multicast());
+        test_success!(control, "CS_A", ServiceAddr::CONTROL);
+        test_success!(control_shorthand, "CS", ServiceAddr::CONTROL);
+        test_success!(daemon, "DS_A", ServiceAddr::DAEMON);
+        test_success!(daemon_shorthand, "DS", ServiceAddr::DAEMON);
+        test_success!(wildcard, "Wildcard_A", ServiceAddr::WILDCARD);
+        test_success!(wildcard_shorthand, "Wildcard", ServiceAddr::WILDCARD);
+        test_success!(control_multicast, "CS_M", ServiceAddr::CONTROL.multicast());
+        test_success!(daemon_multicast, "DS_M", ServiceAddr::DAEMON.multicast());
         test_success!(
             wildcard_multicast,
             "Wildcard_M",
-            ServiceAddress::WILDCARD.multicast()
+            ServiceAddr::WILDCARD.multicast()
         );
 
         macro_rules! test_error {
@@ -181,7 +177,7 @@ mod tests {
                 #[test]
                 fn $name() {
                     assert_eq!(
-                        ServiceAddress::from_str($str).unwrap_err(),
+                        ServiceAddr::from_str($str).unwrap_err(),
                         AddressParseError(AddressKind::Service)
                     );
                 }
@@ -209,19 +205,15 @@ mod tests {
             };
         }
 
-        test_display!(unknown, ServiceAddress(0xABC), "<SVC:0x0abc>");
-        test_display!(control, ServiceAddress::CONTROL, "CS");
-        test_display!(
-            control_multicast,
-            ServiceAddress::CONTROL.multicast(),
-            "CS_M"
-        );
-        test_display!(daemon, ServiceAddress::DAEMON, "DS");
-        test_display!(daemon_multicast, ServiceAddress::DAEMON.multicast(), "DS_M");
-        test_display!(wildcard, ServiceAddress::WILDCARD, "Wildcard");
+        test_display!(unknown, ServiceAddr(0xABC), "<SVC:0x0abc>");
+        test_display!(control, ServiceAddr::CONTROL, "CS");
+        test_display!(control_multicast, ServiceAddr::CONTROL.multicast(), "CS_M");
+        test_display!(daemon, ServiceAddr::DAEMON, "DS");
+        test_display!(daemon_multicast, ServiceAddr::DAEMON.multicast(), "DS_M");
+        test_display!(wildcard, ServiceAddr::WILDCARD, "Wildcard");
         test_display!(
             wildcard_multicast,
-            ServiceAddress::WILDCARD.multicast(),
+            ServiceAddr::WILDCARD.multicast(),
             "Wildcard_M"
         );
     }

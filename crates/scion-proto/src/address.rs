@@ -8,7 +8,7 @@ mod ia;
 pub use ia::IsdAsn;
 
 mod service;
-pub use service::ServiceAddress;
+pub use service::ServiceAddr;
 
 mod host;
 pub use host::{HostAddr, HostType};

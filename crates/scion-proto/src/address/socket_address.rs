@@ -10,7 +10,7 @@ use super::{
     ScionAddrSvc,
     ScionAddrV4,
     ScionAddrV6,
-    ServiceAddress,
+    ServiceAddr,
 };
 use crate::packet::AddressInfo;
 
@@ -18,7 +18,7 @@ use crate::packet::AddressInfo;
 ///
 /// SCION socket addresses consist of an ISD-AS number, a 16-bit port identifier, and either an
 /// [IPv4 address][`Ipv4Addr`], an [IPv6 address][`Ipv6Addr`], or a
-/// [SCION service address][`ServiceAddress`].
+/// [SCION service address][`ServiceAddr`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum SocketAddr {
     /// An IPv4 socket address.
@@ -306,7 +306,7 @@ socket_address! {
     /// and a 16-bit port number.
     ///
     /// See [`SocketAddr`] for a type encompassing IPv6, IPv6, and Service socket addresses.
-    pub struct SocketAddrSvc {scion_addr: ScionAddrSvc, host_addr: ServiceAddress, kind: AddressKind::SocketSvc};
+    pub struct SocketAddrSvc {scion_addr: ScionAddrSvc, host_addr: ServiceAddr, kind: AddressKind::SocketSvc};
 }
 
 #[cfg(test)]

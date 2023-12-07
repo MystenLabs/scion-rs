@@ -1,11 +1,11 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use super::{error::AddressKind, AddressParseError, HostAddr, IsdAsn, ServiceAddress};
+use super::{error::AddressKind, AddressParseError, HostAddr, IsdAsn, ServiceAddr};
 
 /// A SCION network address.
 ///
 /// SCION network addresses consist of an ISD-AS number, and either an [IPv4 address][`Ipv4Addr`],
-/// an [IPv6 address][`Ipv6Addr`], or a [SCION service address][`ServiceAddress`].
+/// an [IPv6 address][`Ipv6Addr`], or a [SCION service address][`ServiceAddr`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScionAddr {
     /// An IPv4 network address
@@ -178,7 +178,7 @@ scion_address! {
     ///
     /// SCION IPv4 addresses consist of a SCION ISD-AS number and an IPv4 address.
     ///
-    /// See [`ScionAddr`] for a type encompassing SCION IPv6, IPv6, and Service addresses.
+    /// See [`ScionAddr`] for a type encompassing SCION IPv4, IPv6, and Service addresses.
     pub struct ScionAddrV4 {host: Ipv4Addr, kind: AddressKind::ScionV4};
 }
 
@@ -187,7 +187,7 @@ scion_address! {
     ///
     /// SCION IPv6 addresses consist of a SCION ISD-AS number and an IPv6 address.
     ///
-    /// See [`ScionAddr`] for a type encompassing SCION IPv6, IPv6, and Service addresses.
+    /// See [`ScionAddr`] for a type encompassing SCION IPv4, IPv6, and Service addresses.
     pub struct ScionAddrV6 {host: Ipv6Addr, kind: AddressKind::ScionV6};
 }
 
@@ -196,6 +196,6 @@ scion_address! {
     ///
     /// SCION service addresses consist of a SCION ISD-AS number and a service address.
     ///
-    /// See [`ScionAddr`] for a type encompassing SCION IPv6, IPv6, and Service addresses.
-    pub struct ScionAddrSvc {host: ServiceAddress, kind: AddressKind::ScionSvc};
+    /// See [`ScionAddr`] for a type encompassing SCION IPv4, IPv6, and Service addresses.
+    pub struct ScionAddrSvc {host: ServiceAddr, kind: AddressKind::ScionSvc};
 }

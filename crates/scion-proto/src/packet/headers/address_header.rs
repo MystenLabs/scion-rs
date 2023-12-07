@@ -2,7 +2,7 @@ use bytes::{Buf, BufMut};
 
 use super::AddressInfo;
 use crate::{
-    address::{HostAddr, HostType, IsdAsn, ScionAddr, ServiceAddress, SocketAddr},
+    address::{HostAddr, HostType, IsdAsn, ScionAddr, ServiceAddr, SocketAddr},
     packet::{ByEndpoint, DecodeError, InadequateBufferSize},
     wire_encoding::{MaybeEncoded, WireDecodeWithContext, WireEncode},
 };
@@ -152,7 +152,7 @@ where
             HostType::Ipv4 => HostAddr::V4(data.get_u32().into()),
             HostType::Ipv6 => HostAddr::V6(data.get_u128().into()),
             HostType::Svc => {
-                let address = HostAddr::Svc(ServiceAddress(data.get_u16()));
+                let address = HostAddr::Svc(ServiceAddr(data.get_u16()));
                 // Remove service address's 2-byte padding
                 let _ = data.get_u16();
 
@@ -264,7 +264,7 @@ mod tests {
 
     test_encode_decode! {
         name: ipv6_to_service,
-        destination: {ia: "31-ff00:96:0", host: HostAddr::Svc(ServiceAddress::DAEMON.multicast())},
+        destination: {ia: "31-ff00:96:0", host: HostAddr::Svc(ServiceAddr::DAEMON.multicast())},
         source: {ia: "47-ff13:0:cd", host: HostAddr::V6("2001:0db8:ac10:fe01::".parse()?)},
         encoded: &[
             0, 31, 0xff, 0, 0, 0x96, 0, 0,

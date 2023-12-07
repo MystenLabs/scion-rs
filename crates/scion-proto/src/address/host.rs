@@ -1,6 +1,6 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use super::ServiceAddress;
+use super::ServiceAddr;
 
 /// The AS-local host identifier of a SCION address.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -10,7 +10,7 @@ pub enum HostAddr {
     /// An IPv6 host address
     V6(Ipv6Addr),
     /// A SCION-service host address
-    Svc(ServiceAddress),
+    Svc(ServiceAddr),
 }
 
 impl From<Ipv4Addr> for HostAddr {
