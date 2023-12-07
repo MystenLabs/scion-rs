@@ -195,6 +195,16 @@ pub enum MaybeEncoded<T, U> {
     Encoded(U),
 }
 
+impl<T, U> MaybeEncoded<T, U> {
+    /// Consumes the MaybeEncoded returning an Some(t) for Maybe::Encoded(t) otherwise None.
+    pub fn decoded(self) -> Option<T> {
+        match self {
+            MaybeEncoded::Decoded(decoded) => Some(decoded),
+            MaybeEncoded::Encoded(_) => None,
+        }
+    }
+}
+
 impl<T, U> MaybeEncoded<T, U>
 where
     T: Into<U>,
