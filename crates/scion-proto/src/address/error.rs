@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
-/// An error which can be returned when parsing a SCION socket address, host address, or
-/// ISD identifier, AS number, or ISD-AS number.
+/// An error which can be returned when parsing various SCION address formats.
 #[derive(Eq, PartialEq, Clone, Debug, thiserror::Error)]
 pub struct AddressParseError(pub(super) AddressKind);
 
@@ -16,6 +15,10 @@ impl Display for AddressParseError {
             AddressKind::SocketV6 => "invalid SCION-IPv6 socket address syntax",
             AddressKind::SocketSvc => "invalid service socket address syntax",
             AddressKind::Socket => "invalid socket address syntax",
+            AddressKind::ScionV4 => "invalid SCION-IPv4 address",
+            AddressKind::ScionV6 => "invalid SCION-IPv6 address",
+            AddressKind::ScionSvc => "invalid SCION-service address",
+            AddressKind::Scion => "invalid SCION address",
         };
 
         fmt.write_str(description)
@@ -28,6 +31,10 @@ pub(super) enum AddressKind {
     Asn,
     IsdAsn,
     Service,
+    Scion,
+    ScionV4,
+    ScionV6,
+    ScionSvc,
     Socket,
     SocketV4,
     SocketV6,
