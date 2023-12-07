@@ -1,7 +1,17 @@
 use core::{fmt::Display, str::FromStr};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use super::{error::AddressKind, AddressParseError, HostAddr, IsdAsn, ServiceAddress};
+use super::{
+    error::AddressKind,
+    AddressParseError,
+    HostAddr,
+    IsdAsn,
+    ScionAddr,
+    ScionAddrSvc,
+    ScionAddrV4,
+    ScionAddrV6,
+    ServiceAddress,
+};
 use crate::packet::AddressInfo;
 
 /// A SCION socket address.
@@ -21,11 +31,11 @@ pub enum SocketAddr {
 
 impl SocketAddr {
     /// Creates a new SCION socket address from an ISD-AS number, SCION host, and port.
-    pub const fn new(isd_asn: IsdAsn, host: HostAddr, port: u16) -> Self {
-        match host {
-            HostAddr::V4(ip) => SocketAddr::V4(SocketAddrV4::new(isd_asn, ip, port)),
-            HostAddr::V6(ip) => SocketAddr::V6(SocketAddrV6::new(isd_asn, ip, port)),
-            HostAddr::Svc(service) => SocketAddr::Svc(SocketAddrSvc::new(isd_asn, service, port)),
+    pub const fn new(scion_addr: ScionAddr, port: u16) -> Self {
+        match scion_addr {
+            ScionAddr::V4(addr) => SocketAddr::V4(SocketAddrV4::new(addr, port)),
+            ScionAddr::V6(addr) => SocketAddr::V6(SocketAddrV6::new(addr, port)),
+            ScionAddr::Svc(addr) => SocketAddr::Svc(SocketAddrSvc::new(addr, port)),
         }
     }
 
@@ -50,9 +60,9 @@ impl SocketAddr {
     /// Returns the host address associated with this socket address.
     pub fn host(&self) -> HostAddr {
         match self {
-            SocketAddr::V4(addr) => addr.host(),
-            SocketAddr::V6(addr) => addr.host(),
-            SocketAddr::Svc(addr) => addr.host(),
+            SocketAddr::V4(addr) => HostAddr::V4(*addr.host()),
+            SocketAddr::V6(addr) => HostAddr::V6(*addr.host()),
+            SocketAddr::Svc(addr) => HostAddr::Svc(*addr.host()),
         }
     }
 
@@ -152,36 +162,50 @@ impl Display for SocketAddr {
 macro_rules! socket_address {
     (
         $(#[$outer:meta])*
-        pub struct $name:ident{$field:ident: $type:ty, kind: $kind:path, setter: $setter:ident};
+        pub struct $name:ident{scion_addr: $type:ty, host_addr: $host_type:ty, kind: $kind:path};
     ) => {
         $(#[$outer])*
         #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Hash)]
         pub struct $name {
-            isd_asn: IsdAsn,
-            $field: $type,
+            scion_addr: $type,
             port: u16,
         }
 
         impl $name {
             /// Creates a new SCION socket address from an [ISD-AS number][`IsdAsn`],
             /// [address][`$type`], and port number.
-            pub const fn new(isd_asn: IsdAsn, $field: $type, port: u16) -> Self {
-                Self { isd_asn, $field, port }
+            pub const fn new(scion_addr: $type, port: u16) -> Self {
+                Self { scion_addr, port }
+            }
+
+            /// Returns the SCION address associated with this socket address.
+            pub const fn scion_addr(&self) -> &$type {
+                &self.scion_addr
+            }
+
+            /// Changes the SCION address to the provided address
+            pub fn set_scion_addr(&mut self, scion_addr: $type) {
+                self.scion_addr = scion_addr
             }
 
             /// Returns the address associated with this socket address.
-            pub const fn $field(&self) -> &$type {
-                &self.$field
+            pub const fn host(&self) -> &$host_type {
+                &self.scion_addr.host()
             }
 
             /// Changes the address associated with this socket address.
-            pub fn $setter(&mut self, $field: $type) {
-                self.$field = $field;
+            pub fn set_host(&mut self, host: $host_type) {
+                self.scion_addr.set_host(host)
             }
 
             /// Returns the ISD-AS number associated with this socket address.
             pub const fn isd_asn(&self) -> IsdAsn {
-                self.isd_asn
+                self.scion_addr.isd_asn()
+            }
+
+            /// Changes the ISD-AS number associated with this socket address.
+            pub fn set_isd_asn(&mut self, new_isd_asn: IsdAsn) {
+                self.scion_addr.set_isd_asn(new_isd_asn);
             }
 
             /// Returns the port number associated with this socket address.
@@ -189,25 +213,15 @@ macro_rules! socket_address {
                 self.port
             }
 
-            /// Changes the ISD-AS number associated with this socket address.
-            pub fn set_isd_asn(&mut self, new_isd_asn: IsdAsn) {
-                self.isd_asn = new_isd_asn;
-            }
-
             /// Changes the port associated with this socket address.
             pub fn set_port(&mut self, new_port: u16) {
                 self.port = new_port;
-            }
-
-            /// Returns the host for the socket address
-            pub fn host(&self) -> HostAddr {
-                HostAddr::from(self.$field)
             }
         }
 
         impl Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "[{},{}]:{}", self.isd_asn(), self.$field(), self.port())
+                write!(f, "[{}]:{}", self.scion_addr, self.port())
             }
         }
 
@@ -215,15 +229,19 @@ macro_rules! socket_address {
             type Err = AddressParseError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                if let Some((isd_asn, host, port)) = parse_ia_and_port(s) {
-                    let $field = host
-                        .parse()
-                        .or(Err(AddressParseError($kind)))?;
+                let (scion_addr, port) = s.rsplit_once(':')
+                    .and_then(|(bracketed_addr, port)| {
+                        if bracketed_addr.starts_with('[') && bracketed_addr.ends_with(']') {
+                            let scion_addr = bracketed_addr[1..bracketed_addr.len()-1].parse().ok();
+                            let port = port.parse().ok();
+                            scion_addr.zip(port)
+                        } else {
+                            None
+                        }
+                    })
+                    .ok_or(AddressParseError($kind))?;
 
-                    Ok(Self { isd_asn, port, $field })
-                } else {
-                    Err($kind.into())
-                }
+                Ok(Self {scion_addr, port })
             }
         }
     };
@@ -236,7 +254,7 @@ socket_address! {
     /// and a 16-bit port number.
     ///
     /// See [`SocketAddr`] for a type encompassing IPv4, IPv6, and Service socket addresses.
-    pub struct SocketAddrV4 {ip: Ipv4Addr, kind: AddressKind::SocketV4, setter: set_ip};
+    pub struct SocketAddrV4 {scion_addr: ScionAddrV4, host_addr: Ipv4Addr, kind: AddressKind::SocketV4};
 }
 
 impl SocketAddrV4 {
@@ -244,15 +262,14 @@ impl SocketAddrV4 {
     /// rust socket address.
     pub const fn from_std(isd_asn: IsdAsn, socket_address: std::net::SocketAddrV4) -> Self {
         Self {
-            isd_asn,
-            ip: *socket_address.ip(),
+            scion_addr: ScionAddrV4::new(isd_asn, *socket_address.ip()),
             port: socket_address.port(),
         }
     }
 
     /// Returns a [`std::net::SocketAddrV4`] corresponding to the AS-local portion of the address.
     pub const fn local_address(&self) -> std::net::SocketAddrV4 {
-        std::net::SocketAddrV4::new(*self.ip(), self.port())
+        std::net::SocketAddrV4::new(*self.host(), self.port())
     }
 }
 
@@ -263,7 +280,7 @@ socket_address! {
     /// and a 16-bit port number.
     ///
     /// See [`SocketAddr`] for a type encompassing IPv6, IPv6, and Service socket addresses.
-    pub struct SocketAddrV6 {ip: Ipv6Addr, kind: AddressKind::SocketV6, setter: set_ip};
+    pub struct SocketAddrV6 {scion_addr: ScionAddrV6, host_addr: Ipv6Addr, kind: AddressKind::SocketV6};
 }
 
 impl SocketAddrV6 {
@@ -271,15 +288,14 @@ impl SocketAddrV6 {
     /// rust socket address.
     pub const fn from_std(isd_asn: IsdAsn, socket_address: std::net::SocketAddrV6) -> Self {
         Self {
-            isd_asn,
-            ip: *socket_address.ip(),
+            scion_addr: ScionAddrV6::new(isd_asn, *socket_address.ip()),
             port: socket_address.port(),
         }
     }
 
     /// Returns a [`std::net::SocketAddrV6`] corresponding to the AS-local portion of the address.
     pub const fn local_address(&self) -> std::net::SocketAddrV6 {
-        std::net::SocketAddrV6::new(*self.ip(), self.port(), 0, 0)
+        std::net::SocketAddrV6::new(*self.host(), self.port(), 0, 0)
     }
 }
 
@@ -290,20 +306,7 @@ socket_address! {
     /// and a 16-bit port number.
     ///
     /// See [`SocketAddr`] for a type encompassing IPv6, IPv6, and Service socket addresses.
-    pub struct SocketAddrSvc {service: ServiceAddress, kind: AddressKind::SocketSvc, setter: set_service};
-}
-
-fn parse_ia_and_port(s: &str) -> Option<(IsdAsn, &str, u16)> {
-    let (bracketed_ia_ip, port) = s.rsplit_once(':')?;
-
-    let port: u16 = port.parse().ok()?;
-
-    if bracketed_ia_ip.starts_with('[') && bracketed_ia_ip.ends_with(']') {
-        let (isd_asn, host) = bracketed_ia_ip[1..bracketed_ia_ip.len() - 1].split_once(',')?;
-        Some((isd_asn.parse().ok()?, host, port))
-    } else {
-        None
-    }
+    pub struct SocketAddrSvc {scion_addr: ScionAddrSvc, host_addr: ServiceAddress, kind: AddressKind::SocketSvc};
 }
 
 #[cfg(test)]
@@ -355,7 +358,7 @@ mod tests {
                 SocketAddrV4,
                 valid,
                 "[1-ff00:0:110,10.0.0.1]:8080",
-                SocketAddrV4::new(parse!("1-ff00:0:110"), Ipv4Addr::new(10, 0, 0, 1), 8080)
+                SocketAddrV4::new(parse!("1-ff00:0:110,10.0.0.1"), 8080)
             );
 
             parse_errs!(IPv4 invalid_ia, "[xxx,192.168.0.1]:80");
@@ -371,11 +374,7 @@ mod tests {
                 SocketAddrV6,
                 valid,
                 "[1-ff00:0:110,2001:db8::ff00:42:8329]:443",
-                SocketAddrV6::new(
-                    parse!("1-ff00:0:110"),
-                    parse!("2001:db8::ff00:42:8329"),
-                    443
-                )
+                SocketAddrV6::new(parse!("1-ff00:0:110,2001:db8::ff00:42:8329"), 443)
             );
 
             parse_errs!(IPv6 invalid_ia, "[xxx,2001:db8::ff00:42:8329]:80");
@@ -391,11 +390,7 @@ mod tests {
                 SocketAddrSvc,
                 valid,
                 "[1-ff00:0:110,CS_M]:443",
-                SocketAddrSvc::new(
-                    parse!("1-ff00:0:110"),
-                    ServiceAddress::CONTROL.multicast(),
-                    443
-                )
+                SocketAddrSvc::new(parse!("1-ff00:0:110,CS_M"), 443)
             );
 
             parse_errs!(Svc invalid_ia, "[xxx,CS_M]:80");
@@ -411,19 +406,14 @@ mod tests {
                 SocketAddr,
                 valid_service,
                 "[1-ff00:0:110,CS_M]:443",
-                SocketAddr::Svc(SocketAddrSvc::new(
-                    parse!("1-ff00:0:110"),
-                    ServiceAddress::CONTROL.multicast(),
-                    443
-                ))
+                SocketAddr::Svc(SocketAddrSvc::new(parse!("1-ff00:0:110,CS_M"), 443))
             );
             parse_ok!(
                 SocketAddr,
                 valid_v6,
                 "[1-ff00:0:110,2001:db8::ff00:42:8329]:443",
                 SocketAddr::V6(SocketAddrV6::new(
-                    parse!("1-ff00:0:110"),
-                    parse!("2001:db8::ff00:42:8329"),
+                    parse!("1-ff00:0:110,2001:db8::ff00:42:8329"),
                     443
                 ))
             );
@@ -431,11 +421,7 @@ mod tests {
                 SocketAddr,
                 valid_v4,
                 "[1-ff00:0:110,10.0.0.1]:8080",
-                SocketAddr::V4(SocketAddrV4::new(
-                    parse!("1-ff00:0:110"),
-                    Ipv4Addr::new(10, 0, 0, 1),
-                    8080
-                ))
+                SocketAddr::V4(SocketAddrV4::new(parse!("1-ff00:0:110,10.0.0.1"), 8080))
             );
 
             parse_errs!(Enum invalid_ia, "[xxx,CS_M]:80");

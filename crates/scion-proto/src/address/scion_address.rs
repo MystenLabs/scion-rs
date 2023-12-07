@@ -61,6 +61,7 @@ impl ScionAddr {
 macro_rules! impl_from {
     ($base:ty, $variant:expr) => {
         impl From<$base> for ScionAddr {
+            #[inline]
             fn from(value: $base) -> Self {
                 $variant(value)
             }
@@ -73,6 +74,7 @@ impl_from!(ScionAddrV6, ScionAddr::V6);
 impl_from!(ScionAddrSvc, ScionAddr::Svc);
 
 impl From<(IsdAsn, HostAddr)> for ScionAddr {
+    #[inline]
     fn from((isd_asn, host): (IsdAsn, HostAddr)) -> Self {
         Self::new(isd_asn, host)
     }
@@ -161,6 +163,7 @@ macro_rules! scion_address {
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 s.split_once(',')
                     .and_then(|(ia_str, host_str)| {
+                        println!("{}, {}", ia_str, host_str);
                         ia_str.parse().ok().zip(host_str.parse().ok())
                     })
                     .map(|(isd_asn, host)| Self {isd_asn, host})

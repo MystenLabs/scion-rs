@@ -8,7 +8,7 @@ use scion_proto::{
     packet::{self, ByEndpoint, EncodeError, ScionPacketRaw, ScionPacketUdp},
     path::Path,
     reliable::Packet,
-    wire_encoding::{MaybeEncoded, WireDecode},
+    wire_encoding::WireDecode,
 };
 use tokio::sync::Mutex;
 
@@ -284,15 +284,12 @@ impl UdpSocketInner {
             return None;
         }
 
-        let MaybeEncoded::Decoded(source_host) = scion_packet.headers.address.host.source else {
+        let source = if let Some(source_scion_addr) = scion_packet.headers.address.source() {
+            SocketAddr::new(source_scion_addr, udp_datagram.port.source)
+        } else {
             tracing::debug!("dropping packet with unsupported source address type");
             return None;
         };
-        let source = SocketAddr::new(
-            scion_packet.headers.address.ia.source,
-            source_host,
-            udp_datagram.port.source,
-        );
 
         let path = {
             let dataplane_path = scion_packet.headers.path.deep_copy();

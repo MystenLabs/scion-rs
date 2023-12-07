@@ -2,7 +2,7 @@ use bytes::{Buf, BufMut};
 
 use super::AddressInfo;
 use crate::{
-    address::{HostAddr, HostType, IsdAsn, ServiceAddress, SocketAddr},
+    address::{HostAddr, HostType, IsdAsn, ScionAddr, ServiceAddress, SocketAddr},
     packet::{ByEndpoint, DecodeError, InadequateBufferSize},
     wire_encoding::{MaybeEncoded, WireDecodeWithContext, WireEncode},
 };
@@ -28,7 +28,7 @@ impl AddressHeader {
     const BASE_LENGTH: usize = 2 * core::mem::size_of::<u64>();
 
     /// Creates a new AddressHeader with the specified ISD-AS numbers and hosts.
-    pub fn new(ia: ByEndpoint<IsdAsn>, host: ByEndpoint<HostAddr>) -> Self {
+    pub const fn new(ia: ByEndpoint<IsdAsn>, host: ByEndpoint<HostAddr>) -> Self {
         Self {
             ia,
             host: ByEndpoint {
@@ -36,6 +36,22 @@ impl AddressHeader {
                 source: MaybeEncoded::Decoded(host.source),
             },
         }
+    }
+
+    /// Return the SCION source address if it was decoded, else None.
+    pub fn source(&self) -> Option<ScionAddr> {
+        self.host
+            .source
+            .decoded()
+            .map(|source| ScionAddr::new(self.ia.source, source))
+    }
+
+    /// Return the SCION destination address if it was decoded, else None.
+    pub fn destination(&self) -> Option<ScionAddr> {
+        self.host
+            .destination
+            .decoded()
+            .map(|destination| ScionAddr::new(self.ia.destination, destination))
     }
 }
 
