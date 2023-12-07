@@ -1,3 +1,5 @@
+//! Types and functions for SCION dataplane paths.
+
 use bytes::{Buf, BufMut, Bytes};
 
 use crate::{
@@ -51,6 +53,7 @@ impl From<u8> for PathType {
     }
 }
 
+/// Error returned when performing operations on a path of currently unsupported [`PathType`].
 #[derive(Debug, thiserror::Error)]
 #[error("unsupported path type {0}")]
 pub struct UnsupportedPathType(pub u8);

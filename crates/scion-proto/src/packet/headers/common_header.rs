@@ -2,10 +2,10 @@ use std::num::NonZeroU8;
 
 use bytes::{Buf, BufMut};
 
-use super::path_header::PathType;
 use crate::{
     address::{HostAddr, HostType},
     packet::{ByEndpoint, DecodeError, InadequateBufferSize},
+    path::PathType,
     wire_encoding::{self, MaybeEncoded, WireDecode, WireEncode},
 };
 

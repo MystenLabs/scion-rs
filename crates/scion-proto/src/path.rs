@@ -9,24 +9,22 @@ use bytes::Bytes;
 use scion_grpc::daemon::v1 as daemon_grpc;
 use tracing::warn;
 
-use crate::{
-    address::IsdAsn,
-    packet::{ByEndpoint, DataplanePath},
-    wire_encoding::WireDecode,
-};
+use crate::{address::IsdAsn, packet::ByEndpoint, wire_encoding::WireDecode};
 
 pub mod error;
 pub use error::{DataplanePathErrorKind, PathParseError, PathParseErrorKind};
 
+pub mod dataplane;
+pub use dataplane::{DataplanePath, PathType, UnsupportedPathType};
+
 pub mod standard;
+pub use standard::StandardPath;
 
 mod metadata;
 pub use metadata::{GeoCoordinates, LinkType, PathInterface, PathMetadata};
 
 pub mod epic;
 pub use epic::EpicAuths;
-
-use self::standard::StandardPath;
 
 /// A SCION end-to-end path with optional metadata
 #[derive(Debug, Clone, PartialEq)]

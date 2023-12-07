@@ -9,11 +9,12 @@ pub use common_header::{AddressInfo, CommonHeader, FlowId, Version};
 mod address_header;
 pub use address_header::{AddressHeader, RawHostAddress};
 
-mod path_header;
-pub use path_header::DataplanePath;
-
 use super::{EncodeError, InadequateBufferSize};
-use crate::{address::SocketAddr, path::Path, wire_encoding::WireEncode};
+use crate::{
+    address::SocketAddr,
+    path::{DataplanePath, Path},
+    wire_encoding::WireEncode,
+};
 
 /// SCION packet headers.
 #[derive(Debug, Clone)]
@@ -135,7 +136,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::packet::headers::path_header::PathType;
+    use crate::path::PathType;
 
     #[test]
     fn new_success() -> Result<(), Box<dyn std::error::Error>> {
