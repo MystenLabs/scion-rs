@@ -90,3 +90,9 @@ impl<T> ByEndpoint<T> {
         }
     }
 }
+
+impl<T: PartialEq> ByEndpoint<T> {
+    pub fn are_equal(&self) -> bool {
+        self.source == self.destination
+    }
+}
