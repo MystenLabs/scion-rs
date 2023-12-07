@@ -50,6 +50,19 @@ impl Path {
         }
     }
 
+    pub fn empty(isd_asn: ByEndpoint<IsdAsn>) -> Self {
+        Self {
+            dataplane_path: DataplanePath::EmptyPath,
+            underlay_next_hop: None,
+            isd_asn,
+            metadata: None,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.dataplane_path.is_empty()
+    }
+
     #[tracing::instrument]
     pub fn try_from_grpc_with_endpoints(
         mut value: daemon_grpc::Path,
@@ -57,7 +70,11 @@ impl Path {
     ) -> Result<Self, PathParseError> {
         let mut dataplane_path = Bytes::from(std::mem::take(&mut value.raw));
         if dataplane_path.is_empty() {
-            return Err(PathParseErrorKind::EmptyRaw.into());
+            return if isd_asn.are_equal() {
+                Ok(Path::empty(isd_asn))
+            } else {
+                Err(PathParseErrorKind::EmptyRaw.into())
+            };
         };
         let dataplane_path = StandardPath::decode(&mut dataplane_path)
             .map_err(|_| PathParseError::from(PathParseErrorKind::InvalidRaw))?
@@ -97,6 +114,31 @@ mod tests {
 
     use super::*;
     use crate::path::metadata::{test_utils::*, PathInterface};
+
+    #[test]
+    fn successful_empty_path() {
+        let path = Path::try_from_grpc_with_endpoints(
+            daemon_grpc::Path {
+                raw: vec![],
+                ..minimal_grpc_path()
+            },
+            ByEndpoint {
+                source: IsdAsn::WILDCARD,
+                destination: IsdAsn::WILDCARD,
+            },
+        )
+        .expect("conversion should succeed");
+        assert!(path.underlay_next_hop.is_none());
+        assert!(path.metadata.is_none());
+        assert!(path.dataplane_path.is_empty());
+        assert_eq!(
+            path.isd_asn,
+            ByEndpoint {
+                source: IsdAsn::WILDCARD,
+                destination: IsdAsn::WILDCARD,
+            }
+        );
+    }
 
     #[test]
     fn successful_conversion() {
@@ -146,8 +188,8 @@ mod tests {
                             ..minimal_grpc_path()
                         },
                         ByEndpoint {
-                            source: IsdAsn::WILDCARD,
-                            destination: IsdAsn::WILDCARD,
+                            source: "1-1".parse().unwrap(),
+                            destination: "1-2".parse().unwrap(),
                         },
                     ),
                     Err($error)
@@ -157,7 +199,7 @@ mod tests {
     }
 
     test_conversion_failure!(
-        empty_raw_path;
+        empty_raw_path_different_ases;
         raw: vec![];
         PathParseErrorKind::EmptyRaw.into()
     );

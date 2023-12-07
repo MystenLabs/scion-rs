@@ -85,6 +85,10 @@ impl DataplanePath {
             Self::Unsupported { path_type, .. } => *path_type,
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self == &Self::EmptyPath
+    }
 }
 
 impl From<StandardPath> for DataplanePath {

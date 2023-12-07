@@ -38,3 +38,19 @@ async fn daemon_request_paths() {
     // However, in a local topology, this should not be an issue.
     assert!(paths.unwrap().count() > 0);
 }
+
+#[tokio::test]
+#[ignore = "requires running sciond"]
+async fn daemon_request_paths_same_as() -> TestError {
+    let destination_isd_asn = "1-ff00:0:111";
+    let paths = daemon_client()
+        .await
+        .paths_to(IsdAsn::from_str(destination_isd_asn).expect("correct ISD-ASN"))
+        .await?;
+
+    // This could be a bit brittle in case sciond doesn't actually have any paths.
+    // However, in a local topology, this should not be an issue.
+    assert!(paths.count() > 0);
+
+    Ok(())
+}
