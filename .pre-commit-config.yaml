@@ -59,6 +59,13 @@ repos:
     language: rust
     types: [rust]
     pass_filenames: false
+  - id: doc
+    name: doc
+    entry: cargo doc
+    args: ["--workspace", "--no-deps"]
+    language: rust
+    types: [rust]
+    pass_filenames: false
   - id: deny
     name: cargo-deny
     entry: cargo deny

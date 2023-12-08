@@ -110,9 +110,9 @@ impl WireEncode for Bytes {
 /// The default implementation of the [`Self::encode_with`] method then checks if the buffer has
 /// sufficient capacity and returns the default error otherwise.
 ///
-/// If multiple different errors should be returned, the [`Self::encode_to`] method must be
-/// implemented in addition. In that case, the [`Self::encode_to_unchecked`] method can simply
-/// call `self.encode_to(buffer).unwrap()`.
+/// If multiple different errors should be returned, the [`Self::encode_with`] method must be
+/// implemented in addition. In that case, the [`Self::encode_with_unchecked`] method can simply
+/// call `self.encode_with(buffer).unwrap()`.
 pub trait WireEncodeVec<const N: usize> {
     /// The error type returned on a failed encode.
     type Error: std::error::Error + Default;

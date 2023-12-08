@@ -17,3 +17,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 tracing-subscriber = "0.3.17"
+
+[lints]
+workspace = true

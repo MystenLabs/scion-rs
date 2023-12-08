@@ -17,3 +17,6 @@ thiserror = "1.0.50"
 tonic = "0.10"
 tonic-build = "0.10"
 tracing = "0.1.40"
+
+[workspace.lints.rust]
+missing_docs = "allow"
