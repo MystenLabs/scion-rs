@@ -168,6 +168,7 @@ fn encode_address(buffer: &mut impl BufMut, address: &SocketAddr) {
 pub struct InvalidRegistrationAddressError;
 
 /// Errors indicating a failure in the registration protocol.
+#[allow(missing_docs)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 pub enum RegistrationError {
     #[error("invalid response length")]

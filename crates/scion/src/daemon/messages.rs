@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::num::TryFromIntError;
 
 use scion_grpc::daemon::v1::{self as daemon_grpc};

@@ -1,3 +1,5 @@
+//! SCION addresses at various granularities (ASes, endhosts, sockets).
+
 mod asn;
 pub use asn::Asn;
 

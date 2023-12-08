@@ -15,13 +15,13 @@ pub enum PathType {
     Empty,
     /// The standard SCION path type.
     Scion,
-    /// One-hop paths between neighbouring border routers.
+    /// One-hop paths between neighboring border routers.
     OneHop,
     /// Experimental Epic path type.
     Epic,
     /// Experimental Colibri path type.
     Colibri,
-    /// Other, unrecognised path types
+    /// Other, unrecognized path types
     Other(u8),
 }
 
@@ -63,10 +63,16 @@ pub enum DataplanePath {
     /// The standard SCION path header.
     Standard(StandardPath),
     /// The raw bytes of an unsupported path header type.
-    Unsupported { path_type: PathType, bytes: Bytes },
+    Unsupported {
+        /// The path's type
+        path_type: PathType,
+        /// The raw encoded path
+        bytes: Bytes,
+    },
 }
 
 impl DataplanePath {
+    /// Returns a deep copy of the object
     pub fn deep_copy(&self) -> Self {
         match self {
             Self::EmptyPath => Self::EmptyPath,
@@ -78,6 +84,7 @@ impl DataplanePath {
         }
     }
 
+    /// Returns the path's type
     pub fn path_type(&self) -> PathType {
         match self {
             Self::EmptyPath => PathType::Empty,
@@ -86,6 +93,7 @@ impl DataplanePath {
         }
     }
 
+    /// Returns true iff the path is a [`DataplanePath::EmptyPath`]
     pub fn is_empty(&self) -> bool {
         self == &Self::EmptyPath
     }

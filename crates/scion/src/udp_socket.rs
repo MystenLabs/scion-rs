@@ -1,3 +1,7 @@
+#![allow(missing_docs)]
+
+//! A socket to send UDP datagrams via SCION.
+
 use std::{cmp, io, sync::Arc};
 
 use bytes::Bytes;
@@ -14,6 +18,7 @@ use tokio::sync::Mutex;
 
 use crate::dispatcher::{self, get_dispatcher_path, DispatcherStream, RegistrationError};
 
+#[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectError {
     #[error("failed to connect to the dispatcher, reason: {0}")]
@@ -22,6 +27,7 @@ pub enum ConnectError {
     RegistrationFailed(#[from] RegistrationError),
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum SendError {
     #[error(transparent)]
@@ -63,6 +69,7 @@ impl From<packet::EncodeError> for SendError {
     }
 }
 
+#[derive(Debug)]
 pub struct UdpSocket {
     inner: Arc<UdpSocketInner>,
     local_address: SocketAddr,
@@ -189,8 +196,10 @@ impl UdpSocket {
     }
 }
 
+/// Error messages returned from the UDP socket.
 pub type ReceiveError = std::convert::Infallible;
 
+#[derive(Debug)]
 struct UdpSocketInner {
     state: Mutex<State>,
 }

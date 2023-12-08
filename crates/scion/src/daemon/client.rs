@@ -1,8 +1,9 @@
+//! A client to communicate with the SCION daemon.
+
 use std::env;
 
 use scion_grpc::daemon::{v1 as daemon_grpc, v1::daemon_service_client::DaemonServiceClient};
 use scion_proto::{address::IsdAsn, packet::ByEndpoint, path::Path};
-use thiserror::Error;
 use tonic::transport::Channel;
 use tracing::warn;
 
@@ -11,7 +12,8 @@ use super::{
     AsInfo,
 };
 
-#[derive(Debug, Error)]
+#[allow(missing_docs)]
+#[derive(Debug, thiserror::Error)]
 pub enum DaemonClientError {
     #[error("A communication error occurred: {0}")]
     ConnectionError(#[from] tonic::transport::Error),
@@ -78,6 +80,7 @@ impl DaemonClient {
             .map_err(|_| DaemonClientError::InvalidData)
     }
 
+    /// Request information about the local AS.
     #[inline]
     pub async fn local_sas_info(&self) -> Result<AsInfo, DaemonClientError> {
         self.sas_info(IsdAsn::WILDCARD).await
@@ -106,6 +109,7 @@ impl DaemonClient {
         })
     }
 
+    /// Request paths from the local AS to the specified destination AS.
     #[inline]
     pub async fn paths_to(&self, destination: IsdAsn) -> Result<Paths, DaemonClientError> {
         self.paths(&PathRequest::new(destination)).await

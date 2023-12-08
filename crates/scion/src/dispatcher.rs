@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::{
     io::{self, IoSlice},
     path::Path,
@@ -46,6 +48,7 @@ pub fn get_dispatcher_path() -> String {
     std::env::var(DISPATCHER_PATH_ENV_VARIABLE).unwrap_or(DEFAULT_DISPATCHER_PATH.to_string())
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum RegistrationError {
     #[error("an invalid registration address was provided")]
@@ -66,6 +69,7 @@ impl From<InvalidRegistrationAddressError> for RegistrationError {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum ReceiveError {
     #[error(transparent)]
@@ -74,6 +78,7 @@ pub enum ReceiveError {
     Decode(#[from] DecodeError),
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum SendError {
     #[error(transparent)]

@@ -1,3 +1,5 @@
+//! SCION endhost addresses.
+
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use super::{error::AddressKind, AddressParseError, HostAddr, IsdAsn, ServiceAddr};
@@ -17,6 +19,8 @@ pub enum ScionAddr {
 }
 
 impl ScionAddr {
+    /// Creates a new SCION address based on the [`IsdAsn`] of the AS and the endhost's
+    /// [`HostAddr`].
     pub const fn new(isd_asn: IsdAsn, host: HostAddr) -> Self {
         match host {
             HostAddr::V4(host) => Self::V4(ScionAddrV4::new(isd_asn, host)),

@@ -12,6 +12,7 @@ pub struct StreamParser {
 }
 
 impl StreamParser {
+    /// Creates a new empty [`StreamParser`]
     pub fn new() -> Self {
         Self::default()
     }

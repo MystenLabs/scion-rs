@@ -1,3 +1,5 @@
+//! Tools to communicate with the local SCION daemon.
+
 mod messages;
 pub use messages::{AsInfo, PathRequest};
 

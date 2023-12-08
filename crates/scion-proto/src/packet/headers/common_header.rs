@@ -170,7 +170,7 @@ impl AddressInfo {
     /// Gets the host type.
     ///
     /// The host type is a combination of the stored type and length. It is returned as
-    /// an enum of type [`HostType`] if it is recognised, otherwise the undecoded 4-bit
+    /// an enum of type [`HostType`] if it is recognized, otherwise the undecoded 4-bit
     /// value is returned as a u8.
     pub fn host_type(&self) -> MaybeEncoded<HostType, u8> {
         match self.0 {

@@ -1,3 +1,7 @@
+#![allow(missing_docs)]
+
+//! Comparison between different checksum implementations.
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand::{Fill, SeedableRng};
 use rand_xorshift::XorShiftRng;

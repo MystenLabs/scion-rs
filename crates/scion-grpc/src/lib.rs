@@ -1,5 +1,5 @@
-//! `scion-grpc` provides bindings [gRPC](https://grpc.io/) types and services used within SCION's
-//! control plane.
+//! Bindings for [gRPC](https://grpc.io/) types and services used within SCION's control plane.
+
 pub use prost::Message;
 
 pub mod drkey {

@@ -1,3 +1,5 @@
+//! Traits and tools to decode and encode objects.
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use crate::packet::InadequateBufferSize;
@@ -209,6 +211,8 @@ impl<T, U> MaybeEncoded<T, U>
 where
     T: Into<U>,
 {
+    /// Returns the encoded value of a [`MaybeEncoded`] object (encoding the given value if
+    /// necessary).
     pub fn into_encoded(self) -> U {
         match self {
             MaybeEncoded::Decoded(decoded) => decoded.into(),

@@ -1,13 +1,14 @@
+#![allow(missing_docs)]
+
 use std::net::{IpAddr, SocketAddr};
 
 use bytes::{Buf, BufMut};
-use thiserror::Error;
 
 use super::{wire_utils::encoded_address_and_port_length, ADDRESS_TYPE_OCTETS};
 use crate::{address::HostType, packet::InadequateBufferSize, wire_encoding::WireEncode};
 
 /// Errors occurring during decoding of packets received over the reliable-relay protocol.
-#[derive(Error, Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(thiserror::Error, Debug, Eq, PartialEq, Clone, Copy)]
 pub enum DecodeError {
     /// The decoded packet started with an incorrect token. This indicates a
     /// synchronisation issue with the relay.

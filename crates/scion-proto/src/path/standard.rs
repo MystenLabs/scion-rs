@@ -1,3 +1,5 @@
+//! A standard SCION path,
+
 use std::mem;
 
 use bytes::{Buf, Bytes};
@@ -195,6 +197,7 @@ impl StandardPath {
         &self.meta_header
     }
 
+    /// Creates a deep copy of this path
     pub fn deep_copy(&self) -> Self {
         Self {
             meta_header: self.meta_header.clone(),

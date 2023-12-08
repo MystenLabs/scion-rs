@@ -1,3 +1,5 @@
+//! Protocol including message formats to communicate with the SCION dispatcher.
+
 use std::net::SocketAddr;
 
 use bytes::Bytes;
