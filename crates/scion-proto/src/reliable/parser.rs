@@ -5,8 +5,7 @@ use super::{
     Packet,
 };
 
-/// A parser to decode [`CommonHeader`]s and payloads from a sequence of [`Bytes`]
-/// with arbitrary boundaries.
+/// A parser to decode [`CommonHeader`]s and payloads from a [`BytesMut`].
 #[derive(Debug, Default)]
 pub struct StreamParser {
     header: Option<DecodedHeader>,

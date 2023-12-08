@@ -15,7 +15,8 @@ mod wire_utils;
 
 const ADDRESS_TYPE_OCTETS: usize = 1;
 
-/// A packet received over the [`ReliableRelayProtocol`].
+/// A packet received over the reliable relay protocol with the SCION dispatcher and decoded by the
+/// [`StreamParser`].
 #[derive(Debug)]
 pub struct Packet {
     /// The last AS-level host the packet traversed, such as the ingress border router or the

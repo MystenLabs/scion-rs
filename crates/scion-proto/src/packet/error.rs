@@ -1,7 +1,8 @@
 use super::Version;
 use crate::path::DataplanePathErrorKind;
 
-/// Errors raised when failing to decode a [`ScionPacket`] or its constituents.
+/// Errors raised when failing to decode a [`super::ScionPacketRaw`] or [`super::ScionPacketUdp`]
+/// or its constituents.
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
 pub enum DecodeError {
     #[error("cannot decode packet with unsupported header version {0:?}")]
@@ -24,7 +25,7 @@ impl From<DataplanePathErrorKind> for DecodeError {
     }
 }
 
-/// Errors raised when failing to encode a [`ScionPacket`].
+/// Errors raised when failing to encode a [`super::ScionPacketRaw`] or [`super::ScionPacketUdp`].
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
 pub enum EncodeError {
     #[error("packet payload is too large")]
@@ -36,8 +37,8 @@ pub enum EncodeError {
 /// Raised if the buffer does not have sufficient capacity for encoding the SCION headers.
 ///
 /// As the headers can be a maximum of 1020 bytes in length, it is advisable to have at
-/// least that amount of remaining space for encoding a [`ScionPacket`] (the payload is not
-/// written to the buffer).
+/// least that amount of remaining space for encoding a [`super::ScionPacketRaw`] or
+/// [`super::ScionPacketUdp`] (the payload is not written to the buffer).
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy, Default)]
 #[error("the provided buffer did not have sufficient size")]
 pub struct InadequateBufferSize;
