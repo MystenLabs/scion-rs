@@ -1,3 +1,8 @@
+//! SCION path types.
+//!
+//! This module contains types for SCION paths and metadata as well as encoding and decoding
+//! functions.
+
 use std::net::SocketAddr;
 
 use bytes::Bytes;
@@ -36,6 +41,7 @@ pub struct Path {
     pub metadata: Option<PathMetadata>,
 }
 
+#[allow(missing_docs)]
 impl Path {
     pub fn new(
         dataplane_path: DataplanePath,

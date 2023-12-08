@@ -1,13 +1,16 @@
+/// The type of an inter-domain link based on the underlay connection.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
 pub enum LinkType {
+    /// Invalid link type
     Invalid = -1,
+    /// Unspecified
     #[default]
     Unset = 0,
-    // Direct physical connection.
+    /// Direct physical connection.
     Direct,
-    // Connection with local routing/switching.
+    /// Connection with local routing/switching.
     MultiHop,
-    // Connection overlaid over publicly routed Internet.
+    /// Connection overlaid over publicly routed Internet.
     OpenNet,
 }
 

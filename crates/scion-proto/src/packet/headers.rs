@@ -1,3 +1,5 @@
+//! SCION packet headers.
+
 mod common_header;
 use std::num::NonZeroU8;
 
@@ -13,7 +15,7 @@ pub use path_header::DataplanePath;
 use super::{EncodeError, InadequateBufferSize};
 use crate::{address::SocketAddr, path::Path, wire_encoding::WireEncode};
 
-/// SCION packet headers
+/// SCION packet headers.
 #[derive(Debug, Clone)]
 pub struct ScionHeaders {
     /// Metadata about the remaining headers and payload.
@@ -25,6 +27,8 @@ pub struct ScionHeaders {
 }
 
 impl ScionHeaders {
+    /// Creates a new [`ScionHeaders`] object given the source and destination [`SocketAddr`],
+    /// the [`Path`], the next-header value, and the payload length
     pub fn new(
         endhosts: &ByEndpoint<SocketAddr>,
         path: &Path,
@@ -90,8 +94,10 @@ impl WireEncode for ScionHeaders {
 /// Instances of an object associated with both a source and destination endpoint.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct ByEndpoint<T> {
-    pub destination: T,
+    /// The value for the source
     pub source: T,
+    /// The value for the destination
+    pub destination: T,
 }
 
 impl<T: Clone> ByEndpoint<T> {
@@ -105,6 +111,7 @@ impl<T: Clone> ByEndpoint<T> {
 }
 
 impl<T> ByEndpoint<T> {
+    /// Applies the `function` to both source and destination
     pub fn map<U, F>(&self, function: F) -> ByEndpoint<U>
     where
         F: Fn(&T) -> U,
@@ -117,6 +124,7 @@ impl<T> ByEndpoint<T> {
 }
 
 impl<T: PartialEq> ByEndpoint<T> {
+    /// Returns true iff the source and destination values are equal
     pub fn are_equal(&self) -> bool {
         self.source == self.destination
     }

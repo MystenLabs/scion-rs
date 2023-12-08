@@ -1,3 +1,5 @@
+//! SCION packets containing UDP datagrams.
+
 use bytes::Bytes;
 
 use super::{InadequateBufferSize, ScionHeaders, ScionPacketRaw};
@@ -18,6 +20,7 @@ pub struct ScionPacketUdp {
 }
 
 impl ScionPacketUdp {
+    /// Creates a new SCION UDP packet based on the UDP payload
     pub fn new(
         endhosts: &ByEndpoint<SocketAddr>,
         path: &Path,

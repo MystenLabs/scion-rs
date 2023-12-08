@@ -1,3 +1,5 @@
+//! Types, conversion functions, parsing, and encoding for the SCION endhost stack.
+
 pub mod address;
 pub mod datagram;
 pub mod packet;

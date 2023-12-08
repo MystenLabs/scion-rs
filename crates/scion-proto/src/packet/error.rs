@@ -1,8 +1,11 @@
+//! Errors raised when encoding or decoding SCION packets.
+
 use super::Version;
 use crate::path::DataplanePathErrorKind;
 
 /// Errors raised when failing to decode a [`super::ScionPacketRaw`] or [`super::ScionPacketUdp`]
 /// or its constituents.
+#[allow(missing_docs)]
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
 pub enum DecodeError {
     #[error("cannot decode packet with unsupported header version {0:?}")]
@@ -26,6 +29,7 @@ impl From<DataplanePathErrorKind> for DecodeError {
 }
 
 /// Errors raised when failing to encode a [`super::ScionPacketRaw`] or [`super::ScionPacketUdp`].
+#[allow(missing_docs)]
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
 pub enum EncodeError {
     #[error("packet payload is too large")]

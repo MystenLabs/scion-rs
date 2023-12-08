@@ -16,5 +16,5 @@ tonic-build = { workspace = true }
 [lib]
 bench = false
 
-[lints]
-workspace = true
+[lints.rust]
+missing_docs = "allow"

@@ -1,3 +1,5 @@
+//! Types required for the EPIC path type.
+
 use bytes::Bytes;
 use scion_grpc::daemon::v1 as daemon_grpc;
 

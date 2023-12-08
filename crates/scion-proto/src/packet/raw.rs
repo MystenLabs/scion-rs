@@ -1,3 +1,5 @@
+//! Raw SCION packets.
+
 use bytes::{Buf, Bytes};
 
 use super::{
@@ -26,6 +28,7 @@ pub struct ScionPacketRaw {
 }
 
 impl ScionPacketRaw {
+    /// Creates a new SCION raw packet
     pub fn new(
         endhosts: &ByEndpoint<SocketAddr>,
         path: &Path,

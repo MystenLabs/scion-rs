@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use crate::{
@@ -5,6 +7,7 @@ use crate::{
     wire_encoding::{WireDecode, WireEncodeVec},
 };
 
+#[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum UdpDecodeError {
     #[error("datagram is empty or was truncated")]
@@ -13,6 +16,7 @@ pub enum UdpDecodeError {
     WrongProtocolNumber(u8),
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum UdpEncodeError {
     #[error("payload length cannot be encoded")]

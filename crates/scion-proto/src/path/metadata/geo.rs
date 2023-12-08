@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use scion_grpc::daemon::v1 as daemon_grpc;
 
 /// Geographic coordinates with latitude and longitude
