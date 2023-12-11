@@ -1,0 +1,138 @@
+#cloud-config
+#
+# References:
+# - Cloudinit boot stages: https://cloudinit.readthedocs.io/en/latest/explanation/boot.html
+# - Modules in each stage: https://stackoverflow.com/a/37190866
+
+# ----------------------------------------
+#   INIT STAGE
+# ----------------------------------------
+
+# Allow password-less sudo for ubuntu and add to docker group
+users:
+  - name: ubuntu
+    sudo: 'ALL=(ALL) NOPASSWD:ALL'
+    groups: docker
+
+ssh_authorized_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMYaFgA+CDCewmTdEgr14RHMXKLRkbTTIOrARMkzY0vv testing
+
+# Write the scripts to build SCION and run the network, as well as the systemd unit files
+# that will invoke them.
+write_files:
+  - path: /etc/scion-rs-integration/build_scion.sh
+    owner: "root:root"
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      export PATH="/home/ubuntu/.local/bin/:$PATH"
+
+      git clone --depth=1 https://github.com/scionproto/scion /etc/scion-rs-integration/scion
+      cd /etc/scion-rs-integration/scion
+
+      ./tools/install_bazel
+      ./tools/install_deps
+      ./scion.sh bazel-remote
+
+      make build
+
+  - path: /etc/scion-rs-integration/run_network.sh
+    owner: "root:root"
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      export PATH="/home/ubuntu/.local/bin/:$PATH"
+      EXTERNAL_ADDRESS=$(ip route get 9.9.9.9 | sed "s/.*src \([^ ]*\).*/\1/;t;d")
+
+      cd /etc/scion-rs-integration/scion
+
+      ./scion.sh topology -c topology/tiny.topo
+      ./scion.sh run
+
+      DAEMON_ADDRESS_111=$(jq -r ".\"1-ff00:0:111\"" gen/sciond_addresses.json)
+      sudo iptables -t nat -I PREROUTING \
+        -d $EXTERNAL_ADDRESS -p tcp --match multiport --dports 30000:32000 \
+        -j DNAT --to $DAEMON_ADDRESS_111
+
+  - path: /etc/systemd/system/scion-network.service
+    content: |
+      [Unit]
+      Description=Runs a local SCION network
+      After=cloud-final.service
+
+      [Service]
+      Type=oneshot
+      WorkingDirectory=/etc/scion-rs-integration/scion/
+      ExecStart=/etc/scion-rs-integration/run_network.sh
+      ExecStop=/etc/scion-rs-integration/scion/scion.sh stop
+      RemainAfterExit=yes
+      User=ubuntu
+
+      [Install]
+      WantedBy=cloud-init.target
+
+    # Add a service and timer to recreate certificates and rerun the network
+  - path: /etc/systemd/system/scion-restart.service
+    content: |
+      [Unit]
+      Description=Restarts the local SCION network
+
+      [Service]
+      Type=oneshot
+      ExecStart=/etc/scion-rs-integration/scion/scion.sh stop
+      ExecStart=/etc/scion-rs-integration/run_network.sh
+      WorkingDirectory=/etc/scion-rs-integration/scion/
+      User=ubuntu
+
+  - path: /etc/systemd/system/scion-restart.timer
+    content: |
+      [Unit]
+      Description=Timer to restart the local SCION network
+
+      [Timer]
+      OnCalendar=daily
+
+      [Install]
+      WantedBy=timers.target
+
+# ----------------------------------------
+#   CONFIG STAGE
+# ----------------------------------------
+
+# Setup docker sources
+apt:
+  sources:
+    docker:
+      source: deb [signed-by=$KEY_FILE] https://download.docker.com/linux/ubuntu $RELEASE stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+      keyserver: https://download.docker.com/linux/ubuntu/gpg
+
+# ----------------------------------------
+#   FINAL STAGE
+# ----------------------------------------
+
+# Install required packages
+packages:
+  - ca-certificates
+  - containerd.io
+  - curl
+  - docker-buildx-plugin
+  - docker-ce
+  - docker-ce-cli
+  - docker-compose-plugin
+  - gnupg
+  - make
+  - python3-pip
+package_upgrade: true
+
+runcmd:
+  - echo "net.ipv4.conf.all.route_localnet = 1" >> /etc/sysctl.conf
+  - sysctl --system
+  - chmod "u=rwX,g=rwX,o=rwX" /etc/scion-rs-integration
+  - su ubuntu /etc/scion-rs-integration/build_scion.sh
+  - systemctl enable scion-network.service
+  - systemctl start --no-block scion-network.service scion-restart.timer

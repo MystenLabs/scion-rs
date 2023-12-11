@@ -74,65 +74,34 @@ set up a [local SCION development environment](https://docs.scion.org/en/latest/
 and [run a local SCION topology](https://docs.scion.org/en/latest/dev/run.html).
 
 If you run a different operating system, you can conveniently manage Ubuntu VMs with
-[Multipass](https://multipass.run/install). The following commands can be used to launch a new VM, install prerequisites
+[Multipass](https://multipass.run/install). The following command can be used to launch a new VM, install prerequisites
 inside the VM, install the latest version of SCION, and run a local topology with services accessible from the host
-machine.
+machine:
 
 ```sh
-# set up VM and enable direct SSH access
-# if you have sufficient resources on the host, you may want to increase the VM's resources
-multipass launch --disk 10G --memory 4G --cpus 2 --name scion --cloud-init - <<EOF
-users:
-- name: ubuntu
-  sudo: ALL=(ALL) NOPASSWD:ALL
-  ssh_authorized_keys:
-  - $( cat ~/.ssh/id*.pub )
-EOF
+multipass launch --name scion --disk 10G --memory 4G --cpus 2 --timeout 600 \
+    --cloud-init multipass/cloud-config.yaml
+```
+
+This will take several minutes as it builds SCION from source (hence the increased timeout).
+
+After the launch, you can check that the network started successfully and that you see paths:
+
+```sh
 multipass shell scion
 
-# install prerequisites
-sudo apt-get update
-sudo apt-get install make python3-pip ca-certificates curl gnupg
+sudo systemctl status scion-network.service
 
-# set up Docker
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-echo \
-  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update
-sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo usermod -aG docker $USER
-exit
-
-# download and install SCION
-multipass shell scion
-git clone https://github.com/scionproto/scion
-cd scion
-./tools/install_bazel
-./tools/install_deps
-./scion.sh bazel-remote
-export PATH=/home/ubuntu/.local/bin/:$PATH
-make build
-
-# enable routing to local addresses
-echo "net.ipv4.conf.all.route_localnet = 1" | sudo tee -a /etc/sysctl.conf
-sudo sysctl --system
-
-# optional: run local topology and check that everything works
-./scion.sh topology -c topology/tiny.topo
-./scion.sh run
-sleep 5
+cd /etc/scion-rs-integration/scion/
 bin/scion showpaths --sciond $(./scion.sh sciond-addr 111) 1-ff00:0:112
 ```
 
 Now you can access SCION services from the host system and forward the dispatcher UNIX socket to run integration tests.
-For convenience, you can use the [test_setup.sh](./test_setup.sh) script:
+For convenience, you can use the [test_setup.sh](./multipass/test_setup.sh) script:
 
 ```sh
-. ./test_setup.sh
+chmod 0600 ./multipass/test_id_ed25519
+. ./multipass/test_setup.sh
 cargo test -- --ignored
 ```
 
