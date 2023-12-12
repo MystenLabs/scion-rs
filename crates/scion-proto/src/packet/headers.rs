@@ -101,6 +101,14 @@ pub struct ByEndpoint<T> {
     pub destination: T,
 }
 
+impl<T> ByEndpoint<T> {
+    /// Swaps source and destination.
+    pub fn reverse(&mut self) -> &mut Self {
+        std::mem::swap(&mut self.source, &mut self.destination);
+        self
+    }
+}
+
 impl<T: Clone> ByEndpoint<T> {
     /// Create a new instance where both the source and destination have the same value.
     pub fn with_cloned(source_and_destination: T) -> Self {

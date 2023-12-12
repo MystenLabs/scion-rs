@@ -2,12 +2,12 @@
 
 use std::mem;
 
-use bytes::{Buf, Bytes};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use super::DataplanePathErrorKind;
 use crate::{
-    packet::DecodeError,
-    wire_encoding::{self, WireDecode},
+    packet::{DecodeError, InadequateBufferSize},
+    wire_encoding::{self, WireDecode, WireEncode},
 };
 
 wire_encoding::bounded_uint! {
@@ -45,12 +45,16 @@ wire_encoding::bounded_uint! {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct PathMetaHeader {
     /// An index to the current info field for the packet on its way through the network.
+    ///
+    /// This must be smaller than [`Self::info_fields_count`].
     pub current_info_field: InfoFieldIndex,
 
     /// An index to the current hop field within the segment pointed to by the info field.
     ///
     /// For valid SCION packets, this should point at a hop field associated with the
     /// current info field.
+    ///
+    /// This must be smaller than [`Self::hop_fields_count`].
     pub current_hop_field: HopFieldIndex,
 
     /// Unused bits in the path path meta header.
@@ -59,16 +63,17 @@ pub struct PathMetaHeader {
     /// The number of hop fields in a given segment.
     ///
     /// For valid SCION packets, the SegmentLengths at indices 1 and 2 should be non-zero
-    /// only if the preceding SegmentLengths are non-zero.
+    /// only if all the preceding SegmentLengths are non-zero.
     pub segment_lengths: [SegmentLength; 3],
 }
 
 impl PathMetaHeader {
     /// The length of a path meta header in bytes.
     pub const LENGTH: usize = 4;
-
-    const INFO_FIELD_LENGTH: usize = 8;
-    const HOP_FIELD_LENGTH: usize = 12;
+    /// The length of an info field in bytes
+    pub const INFO_FIELD_LENGTH: usize = 8;
+    /// The length of a hop field in bytes
+    pub const HOP_FIELD_LENGTH: usize = 12;
 
     /// The number of info fields.
     pub const fn info_fields_count(&self) -> usize {
@@ -80,7 +85,7 @@ impl PathMetaHeader {
         }
     }
 
-    /// Return the index of the current info field;
+    /// Returns the index of the current info field.
     pub fn info_field_index(&self) -> usize {
         self.current_info_field.get().into()
     }
@@ -92,9 +97,31 @@ impl PathMetaHeader {
             + self.segment_lengths[2].length()
     }
 
-    /// Return the index of the current hop field;
+    /// Returns the index of the current hop field.
     pub fn hop_field_index(&self) -> usize {
         self.current_hop_field.get().into()
+    }
+
+    /// Returns the offset in bytes of the given info field.
+    pub fn info_field_offset(info_field_index: usize) -> usize {
+        Self::LENGTH + Self::INFO_FIELD_LENGTH * info_field_index
+    }
+
+    /// Returns the offset in bytes of the given hop field.
+    pub fn hop_field_offset(&self, hop_field_index: usize) -> usize {
+        Self::LENGTH
+            + Self::INFO_FIELD_LENGTH * self.info_fields_count()
+            + Self::HOP_FIELD_LENGTH * hop_field_index
+    }
+
+    /// Encodes the header as a `u32`.
+    pub fn as_u32(&self) -> u32 {
+        (u32::from(self.current_info_field.get()) << 30)
+            | (u32::from(self.current_hop_field.get()) << 24)
+            | (u32::from(self.reserved.get()) << 18)
+            | (u32::from(self.segment_lengths[0].get()) << 12)
+            | (u32::from(self.segment_lengths[1].get()) << 6)
+            | (u32::from(self.segment_lengths[2].get()))
     }
 
     const fn encoded_path_length(&self) -> usize {
@@ -117,6 +144,20 @@ impl PathMetaHeader {
             })
             .last()
             .unwrap()
+    }
+}
+
+impl WireEncode for PathMetaHeader {
+    type Error = InadequateBufferSize;
+
+    #[inline]
+    fn encoded_length(&self) -> usize {
+        Self::LENGTH
+    }
+
+    #[inline]
+    fn encode_to_unchecked<T: BufMut>(&self, buffer: &mut T) {
+        buffer.put_u32(self.as_u32());
     }
 }
 
@@ -209,6 +250,67 @@ impl StandardPath {
     pub fn raw(&self) -> Bytes {
         self.encoded_path.clone()
     }
+
+    /// Reverses both the raw path and the metadata in the [`Self::meta_header`].
+    ///
+    /// Can panic if the meta header is inconsistent with the encoded path or the encoded path
+    /// itself is inconsistent (e.g., the `current_info_field` points to an empty segment).
+    pub fn reverse(&self) -> Self {
+        let meta_header = PathMetaHeader {
+            current_info_field: (self.meta_header.info_fields_count() as u8
+                - self.meta_header.current_info_field.get()
+                - 1)
+            .into(),
+            current_hop_field: (self.meta_header.hop_fields_count() as u8
+                - self.meta_header.current_hop_field.get()
+                - 1)
+            .into(),
+            reserved: PathMetaReserved::default(),
+            segment_lengths: match self.meta_header.segment_lengths {
+                [SegmentLength(0), ..] => [SegmentLength(0); 3],
+                [s1, SegmentLength(0), ..] => [s1, SegmentLength(0), SegmentLength(0)],
+                [s1, s2, SegmentLength(0)] => [s2, s1, SegmentLength(0)],
+                [s1, s2, s3] => [s3, s2, s1],
+            },
+        };
+
+        let mut encoded_path = BytesMut::with_capacity(self.encoded_path.len());
+        meta_header.encode_to_unchecked(&mut encoded_path);
+        self.write_reversed_info_fields_to(&mut encoded_path);
+        self.write_reversed_hop_fields_to(&mut encoded_path);
+
+        Self {
+            meta_header,
+            encoded_path: encoded_path.freeze(),
+        }
+    }
+
+    /// Writes the info fields to the provided buffer in reversed order.
+    ///
+    /// This also flips the "construction direction flag" for all info fields.
+    fn write_reversed_info_fields_to(&self, buffer: &mut BytesMut) {
+        for info_field in (0..self.meta_header.info_fields_count()).rev() {
+            let offset = PathMetaHeader::info_field_offset(info_field);
+            let slice = &self
+                .encoded_path
+                .slice(offset..offset + PathMetaHeader::INFO_FIELD_LENGTH);
+
+            buffer.put_u8(slice[0] ^ 0b1); // Flip construction direction flag
+            buffer.put_slice(&slice[1..]);
+        }
+    }
+
+    /// Writes the hop fields to the provided buffer in reversed order.
+    fn write_reversed_hop_fields_to(&self, buffer: &mut BytesMut) {
+        for hop_field in (0..self.meta_header.hop_fields_count()).rev() {
+            let offset = self.meta_header().hop_field_offset(hop_field);
+            buffer.put_slice(
+                &self
+                    .encoded_path
+                    .slice(offset..offset + PathMetaHeader::HOP_FIELD_LENGTH),
+            )
+        }
+    }
 }
 
 impl WireDecode<Bytes> for StandardPath {
@@ -260,53 +362,74 @@ mod tests {
         };
     }
 
-    #[test]
-    fn valid_no_zero_index() {
-        let mut data = path_bytes! {info: 0, hop: 0, seg_lengths: [3, 0, 0], field_len: 44};
-        let header = StandardPath::decode(&mut data).expect("valid decode");
+    macro_rules! test_valid_decode_encode_reverse {
+        ($name:ident, $encoded_path:expr, $decoded_header:expr) => {
+            mod $name {
+                use super::*;
 
-        assert_eq!(
-            *header.meta_header(),
-            PathMetaHeader {
-                current_info_field: InfoFieldIndex(0),
-                current_hop_field: HopFieldIndex(0),
-                reserved: PathMetaReserved(0),
-                segment_lengths: [SegmentLength(3), SegmentLength(0), SegmentLength(0)]
+                #[test]
+                fn decode() {
+                    let mut data = $encoded_path;
+                    let header = StandardPath::decode(&mut data).expect("valid decode");
+
+                    assert_eq!(*header.meta_header(), $decoded_header);
+                }
+
+                #[test]
+                fn encode() {
+                    let encoded_header = $decoded_header.encode_to_bytes();
+
+                    assert_eq!(
+                        encoded_header.slice(..),
+                        $encoded_path[..PathMetaHeader::LENGTH]
+                    );
+                }
+
+                #[test]
+                fn reverse_twice_identity() {
+                    let mut data = $encoded_path;
+                    let header = StandardPath::decode(&mut data).expect("valid decode");
+
+                    let reverse_path = header.reverse();
+                    assert!(header != reverse_path);
+                    assert_eq!(header, reverse_path.reverse());
+                }
             }
-        );
+        };
     }
 
-    #[test]
-    fn valid_minimal() {
-        let mut data = path_bytes! {info: 0, hop: 0, seg_lengths: [1, 0, 0]};
-        let header = StandardPath::decode(&mut data).expect("valid decode");
+    test_valid_decode_encode_reverse!(
+        valid_no_zero_index,
+        path_bytes! {info: 0, hop: 0, seg_lengths: [3, 0, 0], field_len: 44},
+        PathMetaHeader {
+            current_info_field: InfoFieldIndex(0),
+            current_hop_field: HopFieldIndex(0),
+            reserved: PathMetaReserved(0),
+            segment_lengths: [SegmentLength(3), SegmentLength(0), SegmentLength(0)]
+        }
+    );
 
-        assert_eq!(
-            *header.meta_header(),
-            PathMetaHeader {
-                current_info_field: InfoFieldIndex(0),
-                current_hop_field: HopFieldIndex(0),
-                reserved: PathMetaReserved(0),
-                segment_lengths: [SegmentLength(1), SegmentLength(0), SegmentLength(0)]
-            }
-        );
-    }
+    test_valid_decode_encode_reverse!(
+        valid_minimal,
+        path_bytes! {info: 0, hop: 0, seg_lengths: [1, 0, 0]},
+        PathMetaHeader {
+            current_info_field: InfoFieldIndex(0),
+            current_hop_field: HopFieldIndex(0),
+            reserved: PathMetaReserved(0),
+            segment_lengths: [SegmentLength(1), SegmentLength(0), SegmentLength(0)]
+        }
+    );
 
-    #[test]
-    fn valid_with_index() {
-        let mut data = path_bytes! {info: 1, hop: 8, seg_lengths: [5, 4, 0], field_len: 124};
-        let header = StandardPath::decode(&mut data).expect("valid decode");
-
-        assert_eq!(
-            *header.meta_header(),
-            PathMetaHeader {
-                current_info_field: InfoFieldIndex(1),
-                current_hop_field: HopFieldIndex(8),
-                reserved: PathMetaReserved(0),
-                segment_lengths: [SegmentLength(5), SegmentLength(4), SegmentLength(0)]
-            }
-        );
-    }
+    test_valid_decode_encode_reverse!(
+        valid_with_index,
+        path_bytes! {info: 1, hop: 8, seg_lengths: [5, 4, 0], field_len: 124},
+        PathMetaHeader {
+            current_info_field: InfoFieldIndex(1),
+            current_hop_field: HopFieldIndex(8),
+            reserved: PathMetaReserved(0),
+            segment_lengths: [SegmentLength(5), SegmentLength(4), SegmentLength(0)]
+        }
+    );
 
     macro_rules! decode_errs {
         ($name:ident, $path:expr, $err:expr) => {
