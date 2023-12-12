@@ -8,7 +8,7 @@ use scion::{
 use scion_proto::{address::SocketAddr, packet::ByEndpoint, path::Path};
 use tokio::sync::Mutex;
 
-type TestError = Result<(), Box<dyn std::error::Error>>;
+type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 static MESSAGE: Bytes = Bytes::from_static(b"Hello SCION!");
 const TIMEOUT: Duration = std::time::Duration::from_secs(1);
@@ -24,8 +24,7 @@ macro_rules! test_send_receive_reply {
                 LOCK.get_or_init(|| Mutex::default())
             }
 
-            async fn get_sockets(
-            ) -> Result<(UdpSocket, UdpSocket, Path), Box<dyn std::error::Error>> {
+            async fn get_sockets() -> TestResult<(UdpSocket, UdpSocket, Path)> {
                 let endpoints: ByEndpoint<SocketAddr> = ByEndpoint {
                     source: $source.parse().unwrap(),
                     destination: $destination.parse().unwrap(),
@@ -33,7 +32,7 @@ macro_rules! test_send_receive_reply {
                 let daemon_client_source = DaemonClient::connect(&get_daemon_address())
                     .await
                     .expect("should be able to connect");
-                let mut socket_source = UdpSocket::bind(endpoints.source).await?;
+                let socket_source = UdpSocket::bind(endpoints.source).await?;
                 let socket_destination = UdpSocket::bind(endpoints.destination).await?;
 
                 socket_source.connect(endpoints.destination);
@@ -43,14 +42,14 @@ macro_rules! test_send_receive_reply {
                     .next()
                     .unwrap();
                 println!("Forward path: {:?}", path_forward.dataplane_path);
-                socket_source.set_path(path_forward.clone());
+                socket_source.set_path(Some(path_forward.clone()));
 
                 Ok((socket_source, socket_destination, path_forward))
             }
 
             #[tokio::test]
             #[ignore = "requires daemon and dispatcher"]
-            async fn message() -> TestError {
+            async fn message() -> TestResult {
                 let _lock = lock().lock().await;
 
                 let (socket_source, socket_destination, ..) = get_sockets().await?;
@@ -67,7 +66,7 @@ macro_rules! test_send_receive_reply {
 
             #[tokio::test]
             #[ignore = "requires daemon and dispatcher"]
-            async fn message_and_response() -> TestError {
+            async fn message_and_response() -> TestResult {
                 let _lock = lock().lock().await;
 
                 let (socket_source, socket_destination, path_forward) = get_sockets().await?;
@@ -76,7 +75,7 @@ macro_rules! test_send_receive_reply {
                 let mut buffer = [0_u8; 100];
                 let (length, sender, path) = tokio::time::timeout(
                     TIMEOUT,
-                    socket_destination.recv_with_path_from(&mut buffer),
+                    socket_destination.recv_from_with_path(&mut buffer),
                 )
                 .await??;
                 assert_eq!(sender, socket_source.local_addr());
@@ -84,7 +83,7 @@ macro_rules! test_send_receive_reply {
 
                 println!("Reply path: {:?}", path.dataplane_path);
                 socket_destination
-                    .send_to_with(MESSAGE.clone(), sender, &path)
+                    .send_to_via(MESSAGE.clone(), sender, &path)
                     .await?;
 
                 let (_, path_return) =
