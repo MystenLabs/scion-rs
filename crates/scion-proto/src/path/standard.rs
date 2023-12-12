@@ -255,7 +255,7 @@ impl StandardPath {
     ///
     /// Can panic if the meta header is inconsistent with the encoded path or the encoded path
     /// itself is inconsistent (e.g., the `current_info_field` points to an empty segment).
-    pub fn reverse(&self) -> Self {
+    pub fn to_reversed(&self) -> Self {
         let meta_header = PathMetaHeader {
             current_info_field: (self.meta_header.info_fields_count() as u8
                 - self.meta_header.current_info_field.get()
@@ -390,9 +390,9 @@ mod tests {
                     let mut data = $encoded_path;
                     let header = StandardPath::decode(&mut data).expect("valid decode");
 
-                    let reverse_path = header.reverse();
+                    let reverse_path = header.to_reversed();
                     assert!(header != reverse_path);
-                    assert_eq!(header, reverse_path.reverse());
+                    assert_eq!(header, reverse_path.to_reversed());
                 }
             }
         };

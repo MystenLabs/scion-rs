@@ -97,12 +97,24 @@ impl DataplanePath {
     }
 
     /// Reverses the path.
-    pub fn reverse(&self) -> Result<Self, UnsupportedPathType> {
+    pub fn to_reversed(&self) -> Result<Self, UnsupportedPathType> {
         match self {
             Self::EmptyPath => Ok(Self::EmptyPath),
-            Self::Standard(standard_path) => Ok(Self::Standard(standard_path.reverse())),
+            Self::Standard(standard_path) => Ok(Self::Standard(standard_path.to_reversed())),
             Self::Unsupported { path_type, .. } => Err(UnsupportedPathType(u8::from(*path_type))),
         }
+    }
+
+    /// Reverses the path in place.
+    pub fn reverse(&mut self) -> Result<&mut Self, UnsupportedPathType> {
+        match self {
+            Self::EmptyPath => (),
+            Self::Standard(standard_path) => *standard_path = standard_path.to_reversed(),
+            Self::Unsupported { path_type, .. } => {
+                return Err(UnsupportedPathType(u8::from(*path_type)))
+            }
+        }
+        Ok(self)
     }
 
     /// Returns true iff the path is a [`DataplanePath::EmptyPath`]
@@ -205,9 +217,9 @@ mod tests {
     #[test]
     fn reverse_empty() {
         let dataplane_path = DataplanePath::EmptyPath;
-        let reverse_path = dataplane_path.reverse().unwrap();
+        let reverse_path = dataplane_path.to_reversed().unwrap();
         assert_eq!(dataplane_path, reverse_path);
-        assert_eq!(reverse_path.reverse().unwrap(), dataplane_path);
+        assert_eq!(reverse_path.to_reversed().unwrap(), dataplane_path);
     }
 
     test_path_create_encode_decode!(
@@ -231,8 +243,8 @@ mod tests {
     #[test]
     fn reverse_standard() {
         let dataplane_path = standard_path();
-        let reverse_path = dataplane_path.reverse().unwrap();
+        let reverse_path = dataplane_path.to_reversed().unwrap();
         assert!(dataplane_path != reverse_path);
-        assert_eq!(reverse_path.reverse().unwrap(), dataplane_path);
+        assert_eq!(reverse_path.to_reversed().unwrap(), dataplane_path);
     }
 }
