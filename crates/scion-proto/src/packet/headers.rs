@@ -103,6 +103,14 @@ pub struct ByEndpoint<T> {
 
 impl<T> ByEndpoint<T> {
     /// Swaps source and destination.
+    pub fn into_reversed(self) -> Self {
+        Self {
+            source: self.destination,
+            destination: self.source,
+        }
+    }
+
+    /// Swaps source and destination in place.
     pub fn reverse(&mut self) -> &mut Self {
         std::mem::swap(&mut self.source, &mut self.destination);
         self

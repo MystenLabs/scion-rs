@@ -102,22 +102,51 @@ impl UdpSocket {
         self.local_address
     }
 
-    /// Receive a SCION UDP packet from a remote endpoint.
+    /// Receive a SCION UDP packet.
     ///
     /// The UDP payload is written into the provided buffer. If there is insufficient space, excess
     /// data is dropped. The returned number of bytes always refers to the amount of data in the UDP
     /// payload.
+    pub async fn recv(&self, buffer: &mut [u8]) -> Result<usize, ReceiveError> {
+        let (packet_len, _) = self.inner.recv_from(buffer).await?;
+        Ok(packet_len)
+    }
+
+    /// Receive a SCION UDP packet from a remote endpoint.
     ///
-    /// Additionally returns
+    /// This behaves like [`Self::recv`] but additionally returns the remote SCION socket address.
+    pub async fn recv_from(&self, buffer: &mut [u8]) -> Result<(usize, SocketAddr), ReceiveError> {
+        self.inner.recv_from(buffer).await
+    }
+
+    /// Receive a SCION UDP packet from a remote endpoint with path information.
+    ///
+    /// This behaves like [`Self::recv`] but additionally returns
     /// - the remote SCION socket address and
     /// - the path over which the packet was received. For supported path types, this path is
     ///   already reversed such that it can be used directly to send reply packets; for unsupported
-    ///   path types, the path is unmodified.
-    pub async fn recv_from(
+    ///   path types, the path is copied unmodified.
+    ///
+    /// Note that copying/reversing the path requires allocating memory; if you do not need the path
+    /// information, consider using the method [`Self::recv_from`] instead.
+    pub async fn recv_with_path_from(
         &self,
         buffer: &mut [u8],
     ) -> Result<(usize, SocketAddr, Path), ReceiveError> {
-        self.inner.recv_from(buffer).await
+        self.inner.recv_with_path_from(buffer).await
+    }
+
+    /// Receive a SCION UDP packet with path information.
+    ///
+    /// This behaves like [`Self::recv`] but additionally returns the path over which the packet was
+    /// received. For supported path types, this path is already reversed such that it can be used
+    /// directly to send reply packets; for unsupported path types, the path is copied unmodified.
+    ///
+    /// Note that copying/reversing the path requires allocating memory; if you do not need the path
+    /// information, consider using the method [`Self::recv`] instead.
+    pub async fn recv_with_path(&self, buffer: &mut [u8]) -> Result<(usize, Path), ReceiveError> {
+        let (packet_len, _, path) = self.inner.recv_with_path_from(buffer).await?;
+        Ok((packet_len, path))
     }
 
     /// Returns the remote SCION address set for this socket, if any.
@@ -257,7 +286,27 @@ impl UdpSocketInner {
         Ok(())
     }
 
-    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr, Path), ReceiveError> {
+    async fn recv_with_path_from(
+        &self,
+        buf: &mut [u8],
+    ) -> Result<(usize, SocketAddr, Path), ReceiveError> {
+        let (packet_len, sender, mut path) = self.recv_loop(buf).await?;
+        // Explicit match here in case we add other errors to the `reverse` method at some point
+        match path.dataplane_path.reverse() {
+            Ok(_) => {
+                path.isd_asn.reverse();
+            }
+            Err(UnsupportedPathType(_)) => path.dataplane_path = path.dataplane_path.deep_copy(),
+        };
+        Ok((packet_len, sender, path))
+    }
+
+    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr), ReceiveError> {
+        let (packet_len, sender, ..) = self.recv_loop(buf).await?;
+        Ok((packet_len, sender))
+    }
+
+    async fn recv_loop(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr, Path), ReceiveError> {
         loop {
             let receive_result = {
                 let state = &mut *self.state.lock().await;
@@ -266,8 +315,8 @@ impl UdpSocketInner {
 
             match receive_result {
                 Ok(packet) => {
-                    if let Some(result) = self.parse_incoming(packet, buf) {
-                        return Ok(result);
+                    if let Some((packet_len, sender, path)) = self.parse_incoming(packet, buf) {
+                        return Ok((packet_len, sender, path));
                     } else {
                         continue;
                     }
@@ -303,24 +352,19 @@ impl UdpSocketInner {
             return None;
         };
 
-        let path = {
-            // Explicit match here in case we add other errors to the `reverse` method at some point
-            let dataplane_path = match scion_packet.headers.path.reverse() {
-                Ok(p) => p,
-                Err(UnsupportedPathType(_)) => scion_packet.headers.path.deep_copy(),
-            };
-            Path::new(
-                dataplane_path,
-                *scion_packet.headers.address.ia.reverse(),
-                packet.last_host,
-            )
-        };
-
         let payload_len = udp_datagram.payload.len();
         let copy_length = cmp::min(payload_len, buf.len());
         buf[..copy_length].copy_from_slice(&udp_datagram.payload[..copy_length]);
 
-        Some((payload_len, source, path))
+        Some((
+            payload_len,
+            source,
+            Path::new(
+                scion_packet.headers.path,
+                scion_packet.headers.address.ia,
+                packet.last_host,
+            ),
+        ))
     }
 }
 
