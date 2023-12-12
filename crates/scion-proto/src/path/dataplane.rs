@@ -96,6 +96,15 @@ impl DataplanePath {
         }
     }
 
+    /// Reverses the path.
+    pub fn reverse(&self) -> Result<Self, UnsupportedPathType> {
+        match self {
+            Self::EmptyPath => Ok(Self::EmptyPath),
+            Self::Standard(standard_path) => Ok(Self::Standard(standard_path.reverse())),
+            Self::Unsupported { path_type, .. } => Err(UnsupportedPathType(u8::from(*path_type))),
+        }
+    }
+
     /// Returns true iff the path is a [`DataplanePath::EmptyPath`]
     pub fn is_empty(&self) -> bool {
         self == &Self::EmptyPath
@@ -192,6 +201,15 @@ mod tests {
     }
 
     test_path_create_encode_decode!(empty, DataplanePath::EmptyPath, 0);
+
+    #[test]
+    fn reverse_empty() {
+        let dataplane_path = DataplanePath::EmptyPath;
+        let reverse_path = dataplane_path.reverse().unwrap();
+        assert_eq!(dataplane_path, reverse_path);
+        assert_eq!(reverse_path.reverse().unwrap(), dataplane_path);
+    }
+
     test_path_create_encode_decode!(
         other,
         DataplanePath::Unsupported {
@@ -200,14 +218,21 @@ mod tests {
         },
         4
     );
-    test_path_create_encode_decode!(
-        standard,
-        {
-            let mut path_raw = BytesMut::with_capacity(36);
-            path_raw.put_u32(0x0000_2000);
-            path_raw.put_slice(&[0_u8; 32]);
-            DataplanePath::Standard(StandardPath::decode(&mut path_raw.freeze()).unwrap())
-        },
-        36
-    );
+
+    fn standard_path() -> DataplanePath {
+        let mut path_raw = BytesMut::with_capacity(36);
+        path_raw.put_u32(0x0000_2000);
+        path_raw.put_slice(&[0_u8; 32]);
+        DataplanePath::Standard(StandardPath::decode(&mut path_raw.freeze()).unwrap())
+    }
+
+    test_path_create_encode_decode!(standard, standard_path(), 36);
+
+    #[test]
+    fn reverse_standard() {
+        let dataplane_path = standard_path();
+        let reverse_path = dataplane_path.reverse().unwrap();
+        assert!(dataplane_path != reverse_path);
+        assert_eq!(reverse_path.reverse().unwrap(), dataplane_path);
+    }
 }

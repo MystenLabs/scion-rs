@@ -10,7 +10,7 @@ use scion_proto::{
     address::SocketAddr,
     datagram::{UdpDatagram, UdpEncodeError},
     packet::{self, ByEndpoint, EncodeError, ScionPacketRaw, ScionPacketUdp},
-    path::Path,
+    path::{Path, UnsupportedPathType},
     reliable::Packet,
     wire_encoding::WireDecode,
 };
@@ -108,8 +108,11 @@ impl UdpSocket {
     /// data is dropped. The returned number of bytes always refers to the amount of data in the UDP
     /// payload.
     ///
-    /// Additionally returns the remote SCION socket address, and the path over which the packet was
-    /// received.
+    /// Additionally returns
+    /// - the remote SCION socket address and
+    /// - the path over which the packet was received. For supported path types, this path is
+    ///   already reversed such that it can be used directly to send reply packets; for unsupported
+    ///   path types, the path is unmodified.
     pub async fn recv_from(
         &self,
         buffer: &mut [u8],
@@ -301,10 +304,14 @@ impl UdpSocketInner {
         };
 
         let path = {
-            let dataplane_path = scion_packet.headers.path.deep_copy();
+            // Explicit match here in case we add other errors to the `reverse` method at some point
+            let dataplane_path = match scion_packet.headers.path.reverse() {
+                Ok(p) => p,
+                Err(UnsupportedPathType(_)) => scion_packet.headers.path.deep_copy(),
+            };
             Path::new(
                 dataplane_path,
-                scion_packet.headers.address.ia,
+                *scion_packet.headers.address.ia.reverse(),
                 packet.last_host,
             )
         };

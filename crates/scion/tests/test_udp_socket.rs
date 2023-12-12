@@ -9,7 +9,7 @@ type TestError = Result<(), Box<dyn std::error::Error>>;
 
 static MESSAGE: Bytes = Bytes::from_static(b"Hello SCION!");
 
-macro_rules! test_send_and_receive {
+macro_rules! test_send_receive_reply {
     ($name:ident, $source:expr, $destination:expr) => {
         #[tokio::test]
         #[ignore = "requires daemon and dispatcher"]
@@ -25,17 +25,17 @@ macro_rules! test_send_and_receive {
             let socket_destination = UdpSocket::bind(endpoints.destination).await?;
 
             socket_source.connect(endpoints.destination);
-            socket_source.set_path(
-                daemon_client_source
-                    .paths_to(endpoints.destination.isd_asn())
-                    .await?
-                    .next()
-                    .unwrap(),
-            );
+            let path_forward = daemon_client_source
+                .paths_to(endpoints.destination.isd_asn())
+                .await?
+                .next()
+                .unwrap();
+            println!("Forward path: {:?}", path_forward.dataplane_path);
+            socket_source.set_path(path_forward.clone());
             socket_source.send(MESSAGE.clone()).await?;
 
             let mut buffer = [0_u8; 100];
-            let (length, sender, _path) = tokio::time::timeout(
+            let (length, sender, path) = tokio::time::timeout(
                 std::time::Duration::from_secs(1),
                 socket_destination.recv_from(&mut buffer),
             )
@@ -43,18 +43,31 @@ macro_rules! test_send_and_receive {
             assert_eq!(sender, endpoints.source);
             assert_eq!(buffer[..length], MESSAGE[..]);
 
+            println!("Reply path: {:?}", path.dataplane_path);
+            socket_destination
+                .send_to_with(MESSAGE.clone(), sender, &path)
+                .await?;
+
+            let (_, _, path_return) = tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                socket_source.recv_from(&mut buffer),
+            )
+            .await??;
+            assert_eq!(path_return.isd_asn, path_forward.isd_asn);
+            assert_eq!(path_return.dataplane_path, path_forward.dataplane_path);
+
             Ok(())
         }
     };
 }
 
-test_send_and_receive!(
+test_send_receive_reply!(
     send_and_receive_up_and_down_segment,
     "[1-ff00:0:111,127.0.0.17]:12345",
     "[1-ff00:0:112,fd00:f00d:cafe::7f00:a]:443"
 );
 
-test_send_and_receive!(
+test_send_receive_reply!(
     send_and_receive_same_as,
     "[1-ff00:0:111,127.0.0.17]:12346",
     "[1-ff00:0:111,127.0.0.17]:8080"
