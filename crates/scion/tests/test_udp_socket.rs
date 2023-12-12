@@ -57,11 +57,9 @@ macro_rules! test_send_receive_reply {
                 socket_source.send(MESSAGE.clone()).await?;
 
                 let mut buffer = [0_u8; 100];
-                let (length, sender) = tokio::time::timeout(
-                    TIMEOUT,
-                    socket_destination.recv_from_without_path(&mut buffer),
-                )
-                .await??;
+                let (length, sender) =
+                    tokio::time::timeout(TIMEOUT, socket_destination.recv_from(&mut buffer))
+                        .await??;
                 assert_eq!(sender, socket_source.local_addr());
                 assert_eq!(buffer[..length], MESSAGE[..]);
                 Ok(())
@@ -76,9 +74,11 @@ macro_rules! test_send_receive_reply {
                 socket_source.send(MESSAGE.clone()).await?;
 
                 let mut buffer = [0_u8; 100];
-                let (length, sender, path) =
-                    tokio::time::timeout(TIMEOUT, socket_destination.recv_from(&mut buffer))
-                        .await??;
+                let (length, sender, path) = tokio::time::timeout(
+                    TIMEOUT,
+                    socket_destination.recv_with_path_from(&mut buffer),
+                )
+                .await??;
                 assert_eq!(sender, socket_source.local_addr());
                 assert_eq!(buffer[..length], MESSAGE[..]);
 
@@ -87,8 +87,9 @@ macro_rules! test_send_receive_reply {
                     .send_to_with(MESSAGE.clone(), sender, &path)
                     .await?;
 
-                let (_, _, path_return) =
-                    tokio::time::timeout(TIMEOUT, socket_source.recv_from(&mut buffer)).await??;
+                let (_, path_return) =
+                    tokio::time::timeout(TIMEOUT, socket_source.recv_with_path(&mut buffer))
+                        .await??;
                 assert_eq!(path_return.isd_asn, path_forward.isd_asn);
                 assert_eq!(path_return.dataplane_path, path_forward.dataplane_path);
 
