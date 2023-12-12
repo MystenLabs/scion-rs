@@ -59,8 +59,8 @@ repos:
     language: rust
     types: [rust]
     pass_filenames: false
-  - id: doc
-    name: doc
+  - id: cargo-doc
+    name: cargo-doc
     entry: cargo doc
     args: ["--workspace", "--no-deps"]
     language: rust
@@ -70,6 +70,6 @@ repos:
     name: cargo-deny
     entry: cargo deny
     files: Cargo.(lock|toml)
-    args: ["--all-features", "check"]
+    args: ["--all-features", "check", "-D", "warnings"]
     language: rust
     pass_filenames: false
