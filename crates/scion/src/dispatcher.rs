@@ -97,18 +97,23 @@ pub struct DispatcherStream {
 }
 
 impl DispatcherStream {
+    /// Create a new DispatcherStream over an already connected UnixStream.
+    pub fn new(stream: UnixStream) -> Self {
+        Self {
+            inner: stream,
+            send_buffer: BytesMut::with_capacity(SEND_BUFFER_LEN),
+            recv_buffer: BytesMut::with_capacity(RECV_BUFFER_LEN),
+            parser: StreamParser::new(),
+        }
+    }
+
     /// Connects to the dispatcher over a Unix socket at the provided path.
     pub async fn connect<P: AsRef<Path> + std::fmt::Debug>(path: P) -> Result<Self, io::Error> {
         tracing::trace!(?path, "connecting to dispatcher");
         let inner = UnixStream::connect(path).await?;
         tracing::trace!("successfully connected");
 
-        Ok(Self {
-            inner,
-            send_buffer: BytesMut::with_capacity(SEND_BUFFER_LEN),
-            recv_buffer: BytesMut::with_capacity(RECV_BUFFER_LEN),
-            parser: StreamParser::new(),
-        })
+        Ok(Self::new(inner))
     }
 
     /// Register to receive SCION packet for the given address and port.
