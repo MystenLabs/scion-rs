@@ -20,6 +20,39 @@ pub struct ScionPacketUdp {
 }
 
 impl ScionPacketUdp {
+    /// Returns the source socket address of the UDP packet.
+    pub fn source(&self) -> Option<SocketAddr> {
+        self.headers
+            .address
+            .source()
+            .map(|scion_addr| SocketAddr::new(scion_addr, self.src_port()))
+    }
+
+    /// Returns the destination socket address of the UDP packet.
+    pub fn destination(&self) -> Option<SocketAddr> {
+        self.headers
+            .address
+            .destination()
+            .map(|scion_addr| SocketAddr::new(scion_addr, self.dst_port()))
+    }
+
+    /// Returns the UDP packet payload.
+    pub fn payload(&self) -> &Bytes {
+        &self.datagram.payload
+    }
+
+    /// Returns the UDP source port
+    pub fn src_port(&self) -> u16 {
+        self.datagram.port.source
+    }
+
+    /// Returns the UDP destination port
+    pub fn dst_port(&self) -> u16 {
+        self.datagram.port.destination
+    }
+}
+
+impl ScionPacketUdp {
     /// Creates a new SCION UDP packet based on the UDP payload
     pub fn new(
         endhosts: &ByEndpoint<SocketAddr>,

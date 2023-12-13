@@ -167,7 +167,6 @@ macro_rules! scion_address {
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 s.split_once(',')
                     .and_then(|(ia_str, host_str)| {
-                        println!("{}, {}", ia_str, host_str);
                         ia_str.parse().ok().zip(host_str.parse().ok())
                     })
                     .map(|(isd_asn, host)| Self {isd_asn, host})
