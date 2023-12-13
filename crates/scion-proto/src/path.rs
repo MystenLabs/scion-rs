@@ -54,6 +54,16 @@ impl Path {
         }
     }
 
+    /// Returns a path for sending packets within the specified AS.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the AS is a wildcard AS.
+    pub fn local(isd_asn: IsdAsn) -> Self {
+        assert!(!isd_asn.is_wildcard(), "no local path for wildcard AS");
+        Self::empty(ByEndpoint::with_cloned(isd_asn))
+    }
+
     pub fn empty(isd_asn: ByEndpoint<IsdAsn>) -> Self {
         Self {
             dataplane_path: DataplanePath::EmptyPath,
