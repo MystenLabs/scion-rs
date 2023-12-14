@@ -2,7 +2,7 @@
 
 use scion_grpc::daemon::v1 as daemon_grpc;
 
-/// Geographic coordinates with latitude and longitude
+/// Geographic coordinates with latitude and longitude.
 // Using a custom type to prevent importing a library here
 #[derive(PartialEq, Clone, Debug, Default)]
 pub struct GeoCoordinates {

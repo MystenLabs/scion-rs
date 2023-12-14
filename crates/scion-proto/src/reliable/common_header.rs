@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+//! Common header for the reliable relay protocol.
 
 use std::net::{IpAddr, SocketAddr};
 
@@ -23,10 +23,12 @@ pub enum DecodeError {
     InvalidAddressType(u8),
 }
 
-/// Partial or fully decoded commonHeader
+/// Partial or fully decoded [`CommonHeader`].
 #[derive(Debug)]
 pub enum DecodedHeader {
+    /// A partially decoded common header.
     Partial(PartialHeader),
+    /// A fully decoded common header.
     Full(CommonHeader),
 }
 
@@ -40,10 +42,12 @@ impl DecodedHeader {
     }
 }
 
-/// A partially decoded common header
+/// A partially decoded common header.
 #[derive(Copy, Clone, Debug)]
 pub struct PartialHeader {
+    /// The host type of the destination (when sending) or the last hop (when receiving).
     pub host_type: HostType,
+    /// The length of the payload.
     pub payload_length: u32,
 }
 
@@ -117,7 +121,7 @@ impl PartialHeader {
 #[derive(Default, Debug, Copy, Clone)]
 pub struct CommonHeader {
     /// The destination to which to relay the packet (when sent), or the last hop
-    /// when receiving.
+    /// (when receiving).
     pub destination: Option<SocketAddr>,
     /// The length of the associated payload.
     pub payload_length: u32,

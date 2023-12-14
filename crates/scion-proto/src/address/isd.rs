@@ -5,10 +5,11 @@ use std::{
 
 use super::{error::AddressKind, AddressParseError};
 
-/// Identifier of a SCION Isolation Domain
+/// Identifier of a SCION Isolation Domain.
 ///
-/// See formatting and allocations here:
-/// <https://github.com/scionproto/scion/wiki/ISD-and-AS-numbering#isd-numbers>
+/// See formatting and allocations [here][isd-and-as-numbering].
+///
+/// [isd-and-as-numbering]: https://github.com/scionproto/scion/wiki/ISD-and-AS-numbering#isd-numbers
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct Isd(u16);
@@ -29,7 +30,7 @@ impl Isd {
         self.0
     }
 
-    /// Return true for the special 'wildcard' AS number
+    /// Return true for the special 'wildcard' AS number.
     ///
     /// # Examples
     ///

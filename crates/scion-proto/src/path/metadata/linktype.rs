@@ -1,9 +1,9 @@
 /// The type of an inter-domain link based on the underlay connection.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
 pub enum LinkType {
-    /// Invalid link type
+    /// Invalid link type.
     Invalid = -1,
-    /// Unspecified
+    /// Unspecified.
     #[default]
     Unset = 0,
     /// Direct physical connection.

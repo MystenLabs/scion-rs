@@ -135,13 +135,10 @@ impl WireEncode for MaybeEncoded<HostAddr, (AddressInfo, RawHostAddress)> {
     }
 }
 
-fn maybe_decode_host<T>(
+fn maybe_decode_host<T: Buf>(
     data: &mut T,
     info: AddressInfo,
-) -> Result<MaybeEncoded<HostAddr, (AddressInfo, RawHostAddress)>, DecodeError>
-where
-    T: Buf,
-{
+) -> Result<MaybeEncoded<HostAddr, (AddressInfo, RawHostAddress)>, DecodeError> {
     if data.remaining() < info.address_length() {
         return Err(DecodeError::PacketEmptyOrTruncated);
     }

@@ -5,7 +5,7 @@ use crate::{
     path::{PathParseError, PathParseErrorKind},
 };
 
-/// SCION interface with the AS's ISD-ASN and the interface's ID
+/// SCION interface with the AS's ISD-ASN and the interface's ID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PathInterface {
     /// The ISD-ASN of the AS where the interface is located
