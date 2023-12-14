@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+//! Representation, encoding, and decoding of UDP datagrams.
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
@@ -23,7 +23,7 @@ pub enum UdpEncodeError {
     PayloadTooLarge,
 }
 
-/// Scion UDP datagram
+/// SCION UDP datagram.
 ///
 /// The SCION UDP datagram format includes a checksum that is calculated based on
 /// the [RFC].
@@ -42,7 +42,13 @@ pub struct UdpDatagram {
 }
 
 impl UdpDatagram {
+    /// SCION protocol number for UDP.
+    ///
+    /// See the [IETF SCION-dataplane RFC draft][rfc] for possible values.
+    ///
+    ///[rfc]: https://www.ietf.org/archive/id/draft-dekater-scion-dataplane-00.html#protnum
     pub const PROTOCOL_NUMBER: u8 = 17;
+    /// Length in bytes of the UDP header.
     pub const HEADER_LEN: usize = 8;
 
     /// Creates a new datagram setting the length field appropriately
@@ -105,10 +111,7 @@ impl WireEncodeVec<2> for UdpDatagram {
     }
 }
 
-impl<T> WireDecode<T> for UdpDatagram
-where
-    T: Buf,
-{
+impl<T: Buf> WireDecode<T> for UdpDatagram {
     type Error = UdpDecodeError;
 
     fn decode(data: &mut T) -> Result<Self, Self::Error> {

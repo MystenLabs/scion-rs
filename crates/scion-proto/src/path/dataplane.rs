@@ -8,7 +8,7 @@ use crate::{
     wire_encoding::{WireDecode, WireDecodeWithContext, WireEncode},
 };
 
-/// SCION path types that may be encountered in a packet
+/// SCION path types that may be encountered in a packet.
 #[repr(u8)]
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
@@ -23,7 +23,7 @@ pub enum PathType {
     Epic,
     /// Experimental Colibri path type.
     Colibri,
-    /// Other, unrecognized path types
+    /// Other, unrecognized path types.
     Other(u8),
 }
 
@@ -58,24 +58,24 @@ impl From<u8> for PathType {
 #[error("unsupported path type {0}")]
 pub struct UnsupportedPathType(pub u8);
 
-/// Dataplane path found in a SCION packet
+/// Dataplane path found in a SCION packet.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DataplanePath {
-    /// The empty path type, used for intra-AS hops
+    /// The empty path type, used for intra-AS hops.
     EmptyPath,
     /// The standard SCION path header.
     Standard(StandardPath),
     /// The raw bytes of an unsupported path header type.
     Unsupported {
-        /// The path's type
+        /// The path's type.
         path_type: PathType,
-        /// The raw encoded path
+        /// The raw encoded path.
         bytes: Bytes,
     },
 }
 
 impl DataplanePath {
-    /// Returns a deep copy of the object
+    /// Returns a deep copy of the object.
     pub fn deep_copy(&self) -> Self {
         match self {
             Self::EmptyPath => Self::EmptyPath,
@@ -87,7 +87,7 @@ impl DataplanePath {
         }
     }
 
-    /// Returns the path's type
+    /// Returns the path's type.
     pub fn path_type(&self) -> PathType {
         match self {
             Self::EmptyPath => PathType::Empty,
@@ -117,7 +117,7 @@ impl DataplanePath {
         Ok(self)
     }
 
-    /// Returns true iff the path is a [`DataplanePath::EmptyPath`]
+    /// Returns true iff the path is a [`DataplanePath::EmptyPath`].
     pub fn is_empty(&self) -> bool {
         self == &Self::EmptyPath
     }

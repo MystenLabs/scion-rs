@@ -1,8 +1,9 @@
-#![allow(missing_docs)]
+//! Errors encountered when parsing SCION paths.
 
 use std::fmt::Display;
 
 #[non_exhaustive]
+#[allow(missing_docs)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 /// Error kinds for dataplane paths.
 pub enum DataplanePathErrorKind {
@@ -32,6 +33,7 @@ impl Display for DataplanePathErrorKind {
 #[derive(Eq, PartialEq, Clone, Debug, thiserror::Error)]
 pub struct PathParseError(PathParseErrorKind);
 
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathParseErrorKind {
     EmptyRaw,

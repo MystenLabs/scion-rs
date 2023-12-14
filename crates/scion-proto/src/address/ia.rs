@@ -32,7 +32,7 @@ impl IsdAsn {
         Asn::new(self.0 & 0xffff_ffff_ffff)
     }
 
-    /// Return true if either the ISD or AS numbers are wildcards
+    /// Returns true if either the ISD or AS numbers are wildcards.
     ///
     /// # Examples
     ///

@@ -16,7 +16,7 @@ pub use geo::GeoCoordinates;
 pub mod path_interface;
 pub use path_interface::PathInterface;
 
-/// Metadata of SCION end-to-end paths
+/// Metadata of SCION end-to-end paths.
 ///
 /// Fields are set to `None` if unset or trying to convert an invalid value.
 /// For vectors, individual entries are `None` if trying to convert an invalid value.

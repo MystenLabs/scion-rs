@@ -26,16 +26,16 @@ pub use metadata::{GeoCoordinates, LinkType, PathInterface, PathMetadata};
 pub mod epic;
 pub use epic::EpicAuths;
 
-/// A SCION end-to-end path with optional metadata
+/// A SCION end-to-end path with optional metadata.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Path {
-    /// The raw bytes to be added as the path header to SCION dataplane packets
+    /// The raw bytes to be added as the path header to SCION dataplane packets.
     pub dataplane_path: DataplanePath,
-    /// The underlay address (IP + port) of the next hop; i.e., the local border router
+    /// The underlay address (IP + port) of the next hop; i.e., the local border router.
     pub underlay_next_hop: Option<SocketAddr>,
-    /// The ISD-ASN where the path starts and ends
+    /// The ISD-ASN where the path starts and ends.
     pub isd_asn: ByEndpoint<IsdAsn>,
-    /// Path metadata
+    /// Path metadata.
     pub metadata: Option<PathMetadata>,
 }
 

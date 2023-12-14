@@ -1,4 +1,4 @@
-//! A standard SCION path,
+//! A standard SCION path.
 
 use std::mem;
 
@@ -11,13 +11,13 @@ use crate::{
 };
 
 wire_encoding::bounded_uint! {
-    /// A 2-bit index into the info fields
+    /// A 2-bit index into the info fields.
     #[derive(Default)]
     pub struct InfoFieldIndex(u8 : 2);
 }
 
 wire_encoding::bounded_uint! {
-    /// A 6-bit index into the hop fields
+    /// A 6-bit index into the hop fields.
     #[derive(Default)]
     pub struct HopFieldIndex(u8 : 6);
 }
@@ -70,9 +70,9 @@ pub struct PathMetaHeader {
 impl PathMetaHeader {
     /// The length of a path meta header in bytes.
     pub const LENGTH: usize = 4;
-    /// The length of an info field in bytes
+    /// The length of an info field in bytes.
     pub const INFO_FIELD_LENGTH: usize = 8;
-    /// The length of a hop field in bytes
+    /// The length of a hop field in bytes.
     pub const HOP_FIELD_LENGTH: usize = 12;
 
     /// The number of info fields.
@@ -238,7 +238,7 @@ impl StandardPath {
         &self.meta_header
     }
 
-    /// Creates a deep copy of this path
+    /// Creates a deep copy of this path.
     pub fn deep_copy(&self) -> Self {
         Self {
             meta_header: self.meta_header.clone(),
@@ -246,7 +246,7 @@ impl StandardPath {
         }
     }
 
-    /// Returns the encoded raw path
+    /// Returns the encoded raw path.
     pub fn raw(&self) -> Bytes {
         self.encoded_path.clone()
     }
