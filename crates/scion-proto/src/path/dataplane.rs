@@ -7,53 +7,27 @@ use bytes::{Buf, BufMut, Bytes};
 use crate::{
     packet::{DecodeError, InadequateBufferSize},
     path::standard::StandardPath,
+    utils::encoded_type,
     wire_encoding::{WireDecode, WireDecodeWithContext, WireEncode},
 };
 
-/// SCION path types that may be encountered in a packet.
-#[repr(u8)]
-#[non_exhaustive]
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum PathType {
-    /// The empty path type.
-    Empty,
-    /// The standard SCION path type.
-    Scion,
-    /// One-hop paths between neighboring border routers.
-    OneHop,
-    /// Experimental Epic path type.
-    Epic,
-    /// Experimental Colibri path type.
-    Colibri,
-    /// Other, unrecognized path types.
-    Other(u8),
-}
-
-impl From<PathType> for u8 {
-    fn from(value: PathType) -> Self {
-        match value {
-            PathType::Empty => 0,
-            PathType::Scion => 1,
-            PathType::OneHop => 2,
-            PathType::Epic => 3,
-            PathType::Colibri => 4,
-            PathType::Other(value) => value,
-        }
+encoded_type!(
+    /// SCION path types that may be encountered in a packet.
+    pub enum PathType(u8){
+        /// The empty path type.
+        Empty = 0,
+        /// The standard SCION path type.
+        Scion = 1,
+        /// One-hop paths between neighboring border routers.
+        OneHop = 2,
+        /// Experimental Epic path type.
+        Epic = 3,
+        /// Experimental Colibri path type.
+        Colibri = 4;
+        /// Other, unrecognized path types.
+        Other = _,
     }
-}
-
-impl From<u8> for PathType {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => Self::Empty,
-            1 => Self::Scion,
-            2 => Self::OneHop,
-            3 => Self::Epic,
-            4 => Self::Colibri,
-            value => Self::Other(value),
-        }
-    }
-}
+);
 
 /// Error returned when performing operations on a path of currently unsupported [`PathType`].
 #[derive(Debug, thiserror::Error)]

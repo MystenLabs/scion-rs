@@ -5,6 +5,7 @@ pub mod datagram;
 pub mod packet;
 pub mod path;
 pub mod reliable;
+pub(crate) mod utils;
 pub mod wire_encoding;
 
 #[cfg(test)]
