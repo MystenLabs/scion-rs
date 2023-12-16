@@ -1,8 +1,8 @@
 //! A standard SCION path.
 
-use std::mem;
+use std::{mem, ops::Deref, slice::ChunksExact};
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes};
 
 use super::DataplanePathErrorKind;
 use crate::{
@@ -145,6 +145,20 @@ impl PathMetaHeader {
             .last()
             .unwrap()
     }
+
+    fn to_reversed(&self) -> Self {
+        Self {
+            current_info_field: InfoFieldIndex(0),
+            current_hop_field: HopFieldIndex(0),
+            reserved: PathMetaReserved::default(),
+            segment_lengths: match self.segment_lengths {
+                [SegmentLength(0), ..] => [SegmentLength(0); 3],
+                [s1, SegmentLength(0), ..] => [s1, SegmentLength(0), SegmentLength(0)],
+                [s1, s2, SegmentLength(0)] => [s2, s1, SegmentLength(0)],
+                [s1, s2, s3] => [s3, s2, s1],
+            },
+        }
+    }
 }
 
 impl WireEncode for PathMetaHeader {
@@ -225,19 +239,126 @@ const fn nth_field<const N: usize>(fields: u32) -> u8 {
 ///
 /// Consists of a [`PathMetaHeader`] along with one or more info fields and hop fields.
 #[derive(Debug, Clone, PartialEq)]
-pub struct StandardPath {
+pub struct StandardPath<T = Bytes> {
     /// The meta information about the stored path.
     meta_header: PathMetaHeader,
     /// The raw data containing the meta_header, info, and hop fields.
-    encoded_path: Bytes,
+    encoded_path: T,
 }
 
-impl StandardPath {
+impl<T> StandardPath<T> {
     /// Returns the metadata about the stored path.
     pub fn meta_header(&self) -> &PathMetaHeader {
         &self.meta_header
     }
+}
 
+impl<T> StandardPath<T>
+where
+    T: Deref<Target = [u8]>,
+{
+    /// Returns the encoded raw path.
+    pub fn raw(&self) -> &[u8] {
+        &self.encoded_path
+    }
+
+    /// Creates new StandardPath, backed by the provided buffer, by copying this one.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the provided buffer does not have the same length as self.raw().
+    pub fn copy_to_slice<'b>(&self, buffer: &'b mut [u8]) -> StandardPath<&'b mut [u8]> {
+        buffer.copy_from_slice(&self.encoded_path);
+        StandardPath {
+            meta_header: self.meta_header.clone(),
+            encoded_path: buffer,
+        }
+    }
+
+    /// Creates new StandardPath, backed by the provided buffer, by copying and reversing this one.
+    ///
+    /// The reversed path is suitable for use from an end-host: its current hop and info field
+    /// indices are set to 0.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the provided buffer does not have the same length as self.raw().
+    pub fn reverse_to_slice<'b>(&self, buffer: &'b mut [u8]) -> StandardPath<&'b mut [u8]> {
+        assert_eq!(
+            buffer.len(),
+            self.encoded_path.len(),
+            "destination buffer length is not the same as this path's"
+        );
+
+        let mut buf_mut: &mut [u8] = buffer;
+        let meta_header = self.meta_header.to_reversed();
+        meta_header.encode_to_unchecked(&mut buf_mut);
+        self.write_reversed_info_fields_to(&mut buf_mut);
+        self.write_reversed_hop_fields_to(&mut buf_mut);
+
+        StandardPath {
+            meta_header,
+            encoded_path: buffer,
+        }
+    }
+
+    /// Reverses both the raw path and the metadata in the [`Self::meta_header`].
+    ///
+    /// The reversed path is suitable for use from an end-host: its current hop and info field
+    /// indices are set to 0.
+    pub fn to_reversed(&self) -> StandardPath<Bytes> {
+        let mut encoded_path = vec![0u8; self.encoded_path.len()];
+        let StandardPath { meta_header, .. } = self.reverse_to_slice(&mut encoded_path);
+
+        StandardPath {
+            meta_header,
+            encoded_path: encoded_path.into(),
+        }
+    }
+
+    #[inline]
+    fn info_fields(&self) -> ChunksExact<'_, u8> {
+        let start = PathMetaHeader::info_field_offset(0);
+        let stop = start + self.meta_header.info_fields_count() * PathMetaHeader::INFO_FIELD_LENGTH;
+        self.encoded_path[start..stop].chunks_exact(PathMetaHeader::INFO_FIELD_LENGTH)
+    }
+
+    #[inline]
+    fn hop_fields(&self) -> ChunksExact<'_, u8> {
+        let start = self.meta_header().hop_field_offset(0);
+        let stop = start + self.meta_header.hop_fields_count() * PathMetaHeader::HOP_FIELD_LENGTH;
+        self.encoded_path[start..stop].chunks_exact(PathMetaHeader::HOP_FIELD_LENGTH)
+    }
+
+    /// Writes the info fields to the provided buffer in reversed order.
+    ///
+    /// This also flips the "construction direction flag" for all info fields.
+    fn write_reversed_info_fields_to(&self, buffer: &mut &mut [u8]) {
+        for src_slice in self.info_fields().rev() {
+            buffer.put_u8(src_slice[0] ^ 0b1); // Flip construction direction flag
+            buffer.put_slice(&src_slice[1..]);
+        }
+    }
+
+    /// Writes the hop fields to the provided buffer in reversed order.
+    fn write_reversed_hop_fields_to(&self, buffer: &mut &mut [u8]) {
+        for src_slice in self.hop_fields().rev() {
+            buffer.put_slice(src_slice)
+        }
+    }
+}
+
+impl<'b> StandardPath<&'b mut [u8]> {
+    /// Converts a standard path over a mutable reference to one over an immutable reference.
+    pub fn freeze(self) -> StandardPath<&'b [u8]> {
+        StandardPath {
+            meta_header: self.meta_header,
+            encoded_path: &*self.encoded_path,
+        }
+    }
+}
+
+impl StandardPath<Bytes> {
     /// Creates a deep copy of this path.
     pub fn deep_copy(&self) -> Self {
         Self {
@@ -245,70 +366,13 @@ impl StandardPath {
             encoded_path: Bytes::copy_from_slice(&self.encoded_path),
         }
     }
+}
 
-    /// Returns the encoded raw path.
-    pub fn raw(&self) -> Bytes {
-        self.encoded_path.clone()
-    }
-
-    /// Reverses both the raw path and the metadata in the [`Self::meta_header`].
-    ///
-    /// Can panic if the meta header is inconsistent with the encoded path or the encoded path
-    /// itself is inconsistent (e.g., the `current_info_field` points to an empty segment).
-    pub fn to_reversed(&self) -> Self {
-        let meta_header = PathMetaHeader {
-            current_info_field: (self.meta_header.info_fields_count() as u8
-                - self.meta_header.current_info_field.get()
-                - 1)
-            .into(),
-            current_hop_field: (self.meta_header.hop_fields_count() as u8
-                - self.meta_header.current_hop_field.get()
-                - 1)
-            .into(),
-            reserved: PathMetaReserved::default(),
-            segment_lengths: match self.meta_header.segment_lengths {
-                [SegmentLength(0), ..] => [SegmentLength(0); 3],
-                [s1, SegmentLength(0), ..] => [s1, SegmentLength(0), SegmentLength(0)],
-                [s1, s2, SegmentLength(0)] => [s2, s1, SegmentLength(0)],
-                [s1, s2, s3] => [s3, s2, s1],
-            },
-        };
-
-        let mut encoded_path = BytesMut::with_capacity(self.encoded_path.len());
-        meta_header.encode_to_unchecked(&mut encoded_path);
-        self.write_reversed_info_fields_to(&mut encoded_path);
-        self.write_reversed_hop_fields_to(&mut encoded_path);
-
-        Self {
-            meta_header,
-            encoded_path: encoded_path.freeze(),
-        }
-    }
-
-    /// Writes the info fields to the provided buffer in reversed order.
-    ///
-    /// This also flips the "construction direction flag" for all info fields.
-    fn write_reversed_info_fields_to(&self, buffer: &mut BytesMut) {
-        for info_field in (0..self.meta_header.info_fields_count()).rev() {
-            let offset = PathMetaHeader::info_field_offset(info_field);
-            let slice = &self
-                .encoded_path
-                .slice(offset..offset + PathMetaHeader::INFO_FIELD_LENGTH);
-
-            buffer.put_u8(slice[0] ^ 0b1); // Flip construction direction flag
-            buffer.put_slice(&slice[1..]);
-        }
-    }
-
-    /// Writes the hop fields to the provided buffer in reversed order.
-    fn write_reversed_hop_fields_to(&self, buffer: &mut BytesMut) {
-        for hop_field in (0..self.meta_header.hop_fields_count()).rev() {
-            let offset = self.meta_header().hop_field_offset(hop_field);
-            buffer.put_slice(
-                &self
-                    .encoded_path
-                    .slice(offset..offset + PathMetaHeader::HOP_FIELD_LENGTH),
-            )
+impl From<StandardPath<&mut [u8]>> for StandardPath<Bytes> {
+    fn from(value: StandardPath<&mut [u8]>) -> Self {
+        StandardPath {
+            meta_header: value.meta_header,
+            encoded_path: Bytes::copy_from_slice(value.encoded_path),
         }
     }
 }
@@ -386,13 +450,17 @@ mod tests {
                 }
 
                 #[test]
-                fn reverse_twice_identity() {
+                fn reverse_twice_field_identity() {
                     let mut data = $encoded_path;
-                    let header = StandardPath::decode(&mut data).expect("valid decode");
+                    let path = StandardPath::decode(&mut data).expect("valid decode");
 
-                    let reverse_path = header.to_reversed();
-                    assert!(header != reverse_path);
-                    assert_eq!(header, reverse_path.to_reversed());
+                    let twice_reversed = path.to_reversed().to_reversed();
+                    assert!(path.hop_fields().eq(twice_reversed.hop_fields()));
+                    assert!(path.info_fields().eq(twice_reversed.info_fields()));
+                    assert_eq!(
+                        path.meta_header.segment_lengths,
+                        twice_reversed.meta_header.segment_lengths
+                    );
                 }
             }
         };
