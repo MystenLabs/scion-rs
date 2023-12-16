@@ -55,7 +55,7 @@ macro_rules! test_send_receive_reply {
                 let (socket_source, socket_destination, ..) = get_sockets().await?;
                 socket_source.send(MESSAGE.clone()).await?;
 
-                let mut buffer = [0_u8; 100];
+                let mut buffer = vec![0_u8; 1500];
                 let (length, sender) =
                     tokio::time::timeout(TIMEOUT, socket_destination.recv_from(&mut buffer))
                         .await??;
@@ -72,7 +72,7 @@ macro_rules! test_send_receive_reply {
                 let (socket_source, socket_destination, path_forward) = get_sockets().await?;
                 socket_source.send(MESSAGE.clone()).await?;
 
-                let mut buffer = [0_u8; 100];
+                let mut buffer = vec![0_u8; 1500];
                 let (length, sender, path) = tokio::time::timeout(
                     TIMEOUT,
                     socket_destination.recv_from_with_path(&mut buffer),

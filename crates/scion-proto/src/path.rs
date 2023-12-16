@@ -28,9 +28,9 @@ pub use epic::EpicAuths;
 
 /// A SCION end-to-end path with optional metadata.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Path {
+pub struct Path<T = Bytes> {
     /// The raw bytes to be added as the path header to SCION dataplane packets.
-    pub dataplane_path: DataplanePath,
+    pub dataplane_path: DataplanePath<T>,
     /// The underlay address (IP + port) of the next hop; i.e., the local border router.
     pub underlay_next_hop: Option<SocketAddr>,
     /// The ISD-ASN where the path starts and ends.
@@ -40,9 +40,9 @@ pub struct Path {
 }
 
 #[allow(missing_docs)]
-impl Path {
+impl<T> Path<T> {
     pub fn new(
-        dataplane_path: DataplanePath,
+        dataplane_path: DataplanePath<T>,
         isd_asn: ByEndpoint<IsdAsn>,
         underlay_next_hop: Option<SocketAddr>,
     ) -> Self {
@@ -76,7 +76,10 @@ impl Path {
     pub fn is_empty(&self) -> bool {
         self.dataplane_path.is_empty()
     }
+}
 
+#[allow(missing_docs)]
+impl Path<Bytes> {
     #[tracing::instrument]
     pub fn try_from_grpc_with_endpoints(
         mut value: daemon_grpc::Path,

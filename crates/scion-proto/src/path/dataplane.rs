@@ -1,5 +1,7 @@
 //! Types and functions for SCION dataplane paths.
 
+use std::ops::Deref;
+
 use bytes::{Buf, BufMut, Bytes};
 
 use crate::{
@@ -60,32 +62,26 @@ pub struct UnsupportedPathType(pub u8);
 
 /// Dataplane path found in a SCION packet.
 #[derive(Debug, Clone, PartialEq)]
-pub enum DataplanePath {
+pub enum DataplanePath<T = Bytes> {
     /// The empty path type, used for intra-AS hops.
     EmptyPath,
     /// The standard SCION path header.
-    Standard(StandardPath),
+    Standard(StandardPath<T>),
     /// The raw bytes of an unsupported path header type.
     Unsupported {
         /// The path's type.
         path_type: PathType,
         /// The raw encoded path.
-        bytes: Bytes,
+        bytes: T,
     },
 }
 
-impl DataplanePath {
-    /// Returns a deep copy of the object.
-    pub fn deep_copy(&self) -> Self {
-        match self {
-            Self::EmptyPath => Self::EmptyPath,
-            Self::Standard(path) => Self::Standard(path.deep_copy()),
-            Self::Unsupported { path_type, bytes } => Self::Unsupported {
-                path_type: *path_type,
-                bytes: Bytes::copy_from_slice(bytes),
-            },
-        }
-    }
+impl<T> DataplanePath<T> {
+    /// The maximum length of a SCION dataplane path.
+    ///
+    /// Computed from the max header length (1020) minus the common header length (12)
+    /// and the minimum SCION address header length (24).
+    pub const MAX_LEN: usize = 984;
 
     /// Returns the path's type.
     pub fn path_type(&self) -> PathType {
@@ -96,12 +92,67 @@ impl DataplanePath {
         }
     }
 
-    /// Reverses the path.
-    pub fn to_reversed(&self) -> Result<Self, UnsupportedPathType> {
+    /// Returns true iff the path is a [`DataplanePath::EmptyPath`].
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::EmptyPath)
+    }
+}
+
+impl<T> DataplanePath<T>
+where
+    T: Deref<Target = [u8]>,
+{
+    /// Returns the raw binary of the path.
+    pub fn raw(&self) -> &[u8] {
         match self {
-            Self::EmptyPath => Ok(Self::EmptyPath),
-            Self::Standard(standard_path) => Ok(Self::Standard(standard_path.to_reversed())),
+            DataplanePath::EmptyPath => &[],
+            DataplanePath::Standard(path) => path.raw(),
+            DataplanePath::Unsupported { bytes, .. } => bytes.deref(),
+        }
+    }
+
+    /// Creates a new DataplanePath by copying this one into the provided backing buffer.
+    ///
+    /// # Panics
+    ///
+    /// For non-empty paths, this panics if the provided buffer does not have the same
+    /// length as self.raw().
+    pub fn copy_to_slice<'b>(&self, buffer: &'b mut [u8]) -> DataplanePath<&'b mut [u8]> {
+        match self {
+            DataplanePath::EmptyPath => DataplanePath::EmptyPath,
+            DataplanePath::Standard(path) => DataplanePath::Standard(path.copy_to_slice(buffer)),
+            DataplanePath::Unsupported { path_type, bytes } => {
+                buffer.copy_from_slice(bytes);
+                DataplanePath::Unsupported {
+                    path_type: *path_type,
+                    bytes: buffer,
+                }
+            }
+        }
+    }
+
+    /// Reverses the path.
+    pub fn to_reversed(&self) -> Result<DataplanePath, UnsupportedPathType> {
+        match self {
+            Self::EmptyPath => Ok(DataplanePath::EmptyPath),
+            Self::Standard(standard_path) => {
+                Ok(DataplanePath::Standard(standard_path.to_reversed()))
+            }
             Self::Unsupported { path_type, .. } => Err(UnsupportedPathType(u8::from(*path_type))),
+        }
+    }
+}
+
+impl DataplanePath<Bytes> {
+    /// Returns a deep copy of the object.
+    pub fn deep_copy(&self) -> Self {
+        match self {
+            Self::EmptyPath => Self::EmptyPath,
+            Self::Standard(path) => Self::Standard(path.deep_copy()),
+            Self::Unsupported { path_type, bytes } => Self::Unsupported {
+                path_type: *path_type,
+                bytes: Bytes::copy_from_slice(bytes),
+            },
         }
     }
 
@@ -116,10 +167,18 @@ impl DataplanePath {
         }
         Ok(self)
     }
+}
 
-    /// Returns true iff the path is a [`DataplanePath::EmptyPath`].
-    pub fn is_empty(&self) -> bool {
-        self == &Self::EmptyPath
+impl From<DataplanePath<&mut [u8]>> for DataplanePath<Bytes> {
+    fn from(value: DataplanePath<&mut [u8]>) -> Self {
+        match value {
+            DataplanePath::EmptyPath => DataplanePath::EmptyPath,
+            DataplanePath::Standard(path) => DataplanePath::Standard(path.into()),
+            DataplanePath::Unsupported { path_type, bytes } => DataplanePath::Unsupported {
+                path_type,
+                bytes: Bytes::copy_from_slice(bytes),
+            },
+        }
     }
 }
 

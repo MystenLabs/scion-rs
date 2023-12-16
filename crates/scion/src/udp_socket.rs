@@ -14,7 +14,7 @@ use scion_proto::{
     address::SocketAddr,
     datagram::{UdpDatagram, UdpEncodeError},
     packet::{self, ByEndpoint, EncodeError, ScionPacketRaw, ScionPacketUdp},
-    path::{Path, UnsupportedPathType},
+    path::{DataplanePath, Path, UnsupportedPathType},
     reliable::Packet,
     wire_encoding::WireDecode,
 };
@@ -110,7 +110,7 @@ impl UdpSocket {
     /// data is dropped. The returned number of bytes always refers to the amount of data in the UDP
     /// payload.
     pub async fn recv(&self, buffer: &mut [u8]) -> Result<usize, ReceiveError> {
-        let (packet_len, _) = self.inner.recv_from(buffer).await?;
+        let (packet_len, _) = self.recv_from(buffer).await?;
         Ok(packet_len)
     }
 
@@ -118,7 +118,10 @@ impl UdpSocket {
     ///
     /// This behaves like [`Self::recv`] but additionally returns the remote SCION socket address.
     pub async fn recv_from(&self, buffer: &mut [u8]) -> Result<(usize, SocketAddr), ReceiveError> {
-        self.inner.recv_from(buffer).await
+        self.inner
+            .recv_loop(buffer, None)
+            .await
+            .map(|(len, addr, _)| (len, addr))
     }
 
     /// Receive a SCION UDP packet from a remote endpoint with path information.
@@ -128,14 +131,40 @@ impl UdpSocket {
     /// - the path over which the packet was received. For supported path types, this path is
     ///   already reversed such that it can be used directly to send reply packets; for unsupported
     ///   path types, the path is copied unmodified.
-    ///
-    /// Note that copying/reversing the path requires allocating memory; if you do not need the path
-    /// information, consider using the method [`Self::recv_from`] instead.
     pub async fn recv_from_with_path(
         &self,
         buffer: &mut [u8],
     ) -> Result<(usize, SocketAddr, Path), ReceiveError> {
-        self.inner.recv_from_with_path(buffer).await
+        if buffer.is_empty() {
+            return Err(ReceiveError::ZeroLengthBuffer);
+        }
+        if buffer.len() < DataplanePath::<Bytes>::MAX_LEN {
+            return Err(ReceiveError::PathBufferTooShort);
+        }
+
+        // TODO(jsmith): Refactor to accept two buffers and return a Path referring into one.
+        let split_point = buffer.len() - DataplanePath::<Bytes>::MAX_LEN;
+        let (buffer, path_buf) = buffer.split_at_mut(split_point);
+
+        let (packet_len, sender, path) = self.inner.recv_loop(buffer, Some(path_buf)).await?;
+        let Path {
+            dataplane_path,
+            underlay_next_hop,
+            isd_asn,
+            ..
+        } = path.expect("non-None path since path_buf was provided");
+
+        // Explicit match here in case we add other errors to the `reverse` method at some point
+        let dataplane_path = match dataplane_path.to_reversed() {
+            Ok(reversed_dataplane) => reversed_dataplane,
+            Err(UnsupportedPathType(_)) => dataplane_path.into(),
+        };
+
+        Ok((
+            packet_len,
+            sender,
+            Path::new(dataplane_path, isd_asn.into_reversed(), underlay_next_hop),
+        ))
     }
 
     /// Receive a SCION UDP packet with path information.
@@ -143,11 +172,8 @@ impl UdpSocket {
     /// This behaves like [`Self::recv`] but additionally returns the path over which the packet was
     /// received. For supported path types, this path is already reversed such that it can be used
     /// directly to send reply packets; for unsupported path types, the path is copied unmodified.
-    ///
-    /// Note that copying/reversing the path requires allocating memory; if you do not need the path
-    /// information, consider using the method [`Self::recv`] instead.
     pub async fn recv_with_path(&self, buffer: &mut [u8]) -> Result<(usize, Path), ReceiveError> {
-        let (packet_len, _, path) = self.inner.recv_from_with_path(buffer).await?;
+        let (packet_len, _, path) = self.recv_from_with_path(buffer).await?;
         Ok((packet_len, path))
     }
 
@@ -218,6 +244,8 @@ impl UdpSocket {
 pub enum ReceiveError {
     #[error("attempted to receive with a zero-length buffer")]
     ZeroLengthBuffer,
+    #[error("path buffer too short")]
+    PathBufferTooShort,
 }
 
 macro_rules! log_err {
@@ -293,29 +321,18 @@ impl UdpSocketInner {
         Ok(())
     }
 
-    async fn recv_from_with_path(
+    async fn recv_loop<'p>(
         &self,
         buf: &mut [u8],
-    ) -> Result<(usize, SocketAddr, Path), ReceiveError> {
-        let (packet_len, sender, mut path) = self.recv_loop(buf).await?;
-        // Explicit match here in case we add other errors to the `reverse` method at some point
-        match path.dataplane_path.reverse() {
-            Ok(_) => {
-                path.isd_asn.reverse();
-            }
-            Err(UnsupportedPathType(_)) => path.dataplane_path = path.dataplane_path.deep_copy(),
-        };
-        Ok((packet_len, sender, path))
-    }
-
-    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr), ReceiveError> {
-        let (packet_len, sender, ..) = self.recv_loop(buf).await?;
-        Ok((packet_len, sender))
-    }
-
-    async fn recv_loop(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr, Path), ReceiveError> {
+        path_buf: Option<&'p mut [u8]>,
+    ) -> Result<(usize, SocketAddr, Option<Path<&'p mut [u8]>>), ReceiveError> {
         if buf.is_empty() {
             return Err(ReceiveError::ZeroLengthBuffer);
+        }
+        if let Some(path_buf) = path_buf.as_ref() {
+            if path_buf.len() < DataplanePath::<Bytes>::MAX_LEN {
+                return Err(ReceiveError::PathBufferTooShort);
+            }
         }
 
         // Keep a copy of the connection's remote_addr locally, so that the user connecting to a
@@ -323,17 +340,25 @@ impl UdpSocketInner {
         let remote_addr = self.state.read().unwrap().remote_address;
 
         loop {
-            let receive_result = {
-                let stream = &mut *self.stream.lock().await;
-                stream.receive_packet().await
-            };
+            // Keep the lock until we no longer have a dependency on the internal buffers.
+            let mut stream = self.stream.lock().await;
+            let receive_result = stream.receive_packet().await;
 
             match receive_result {
                 Ok(packet) => {
                     if let Some((packet_len, sender, path)) =
-                        self.parse_incoming_for(packet, buf, remote_addr)
+                        self.parse_incoming_from(packet, buf, remote_addr)
                     {
-                        return Ok((packet_len, sender, path));
+                        if let Some(path_buf) = path_buf {
+                            let path_len = path.dataplane_path.raw().len();
+                            let dataplane_path =
+                                path.dataplane_path.copy_to_slice(&mut path_buf[..path_len]);
+                            let path =
+                                Path::new(dataplane_path, path.isd_asn, path.underlay_next_hop);
+                            return Ok((packet_len, sender, Some(path)));
+                        } else {
+                            return Ok((packet_len, sender, None));
+                        }
                     } else {
                         continue;
                     }
@@ -343,7 +368,12 @@ impl UdpSocketInner {
         }
     }
 
-    fn parse_incoming_for(
+    /// Parse a datagram from the provided packet.
+    ///
+    /// # Panics
+    ///
+    /// Panics if path_buf, when not empty, does not have sufficient length for the SCION path.
+    fn parse_incoming_from(
         &self,
         mut packet: Packet,
         buf: &mut [u8],
@@ -599,7 +629,7 @@ mod tests {
         };
         assert_eq!(endpoints.source.isd_asn(), endpoints.destination.isd_asn());
 
-        let mut buffer = [0u8; 64];
+        let mut buffer = vec![0u8; 1500];
         let (socket, mut dispatcher) = utils::socket_from(endpoints.source)?;
         utils::local_send_raw(&mut dispatcher, endpoints, MESSAGE).await?;
 
@@ -643,7 +673,7 @@ mod tests {
         };
         assert_eq!(other_endpoints.source.isd_asn(), endpoints.source.isd_asn());
 
-        let mut buffer = [0u8; 64];
+        let mut buffer = vec![0u8; 1500];
         let (socket, mut dispatcher) = utils::socket_from(endpoints.source)?;
 
         // Write packets to be received
@@ -709,7 +739,7 @@ mod tests {
             };
             assert_eq!(endpoints.source.isd_asn(), endpoints.destination.isd_asn());
 
-            let mut buffer = [0u8; 64];
+            let mut buffer = vec![0u8; 1500];
             let (socket, mut dispatcher) = utils::socket_from(endpoints.source)?;
             utils::local_send_raw(&mut dispatcher, endpoints, MESSAGE).await?;
 
