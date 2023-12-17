@@ -4,7 +4,7 @@
 
 use std::{
     cmp,
-    io,
+    io::{self, ErrorKind},
     sync::{Arc, RwLock},
 };
 
@@ -13,14 +13,17 @@ use chrono::Utc;
 use scion_proto::{
     address::SocketAddr,
     datagram::{UdpDatagram, UdpEncodeError},
-    packet::{self, ByEndpoint, EncodeError, ScionPacketRaw, ScionPacketUdp},
-    path::{DataplanePath, Path, UnsupportedPathType},
+    packet::{ByEndpoint, ScionPacketRaw, ScionPacketUdp},
+    path::{DataplanePath, Path},
     reliable::Packet,
     wire_encoding::WireDecode,
 };
 use tokio::sync::Mutex;
 
-use crate::dispatcher::{self, get_dispatcher_path, DispatcherStream, RegistrationError};
+use crate::{
+    dispatcher::{self, get_dispatcher_path, DispatcherStream, RegistrationError},
+    pan::{AsyncScionDatagram, PathErrorKind, ReceiveError, SendError},
+};
 
 #[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
@@ -31,44 +34,10 @@ pub enum BindError {
     RegistrationFailed(#[from] RegistrationError),
 }
 
-#[allow(missing_docs)]
-#[derive(Debug, thiserror::Error)]
-pub enum SendError {
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error("packet is too large to be sent")]
-    PacketTooLarge,
-    #[error("path is expired")]
-    PathExpired,
-    #[error("remote address is not set")]
-    NotConnected,
-    #[error("path is not set")]
-    NoPath,
-    #[error("no underlay next hop provided by path")]
-    NoUnderlayNextHop,
-}
-
-impl From<dispatcher::SendError> for SendError {
-    fn from(value: dispatcher::SendError) -> Self {
-        match value {
-            dispatcher::SendError::Io(io) => Self::Io(io),
-            dispatcher::SendError::PayloadTooLarge(_) => Self::PacketTooLarge,
-        }
-    }
-}
-
 impl From<UdpEncodeError> for SendError {
     fn from(value: UdpEncodeError) -> Self {
         match value {
             UdpEncodeError::PayloadTooLarge => Self::PacketTooLarge,
-        }
-    }
-}
-
-impl From<packet::EncodeError> for SendError {
-    fn from(value: packet::EncodeError) -> Self {
-        match value {
-            EncodeError::PayloadTooLarge | EncodeError::HeaderTooLarge => Self::PacketTooLarge,
         }
     }
 }
@@ -104,89 +73,6 @@ impl UdpSocket {
         self.inner.local_addr()
     }
 
-    /// Receive a SCION UDP packet.
-    ///
-    /// The UDP payload is written into the provided buffer. If there is insufficient space, excess
-    /// data is dropped. The returned number of bytes always refers to the amount of data in the UDP
-    /// payload.
-    pub async fn recv(&self, buffer: &mut [u8]) -> Result<usize, ReceiveError> {
-        let (packet_len, _) = self.recv_from(buffer).await?;
-        Ok(packet_len)
-    }
-
-    /// Receive a SCION UDP packet from a remote endpoint.
-    ///
-    /// This behaves like [`Self::recv`] but additionally returns the remote SCION socket address.
-    pub async fn recv_from(&self, buffer: &mut [u8]) -> Result<(usize, SocketAddr), ReceiveError> {
-        self.inner
-            .recv_loop(buffer, None)
-            .await
-            .map(|(len, addr, _)| (len, addr))
-    }
-
-    /// Receive a SCION UDP packet from a remote endpoint with path information.
-    ///
-    /// This behaves like [`Self::recv`] but additionally returns
-    /// - the remote SCION socket address and
-    /// - the path over which the packet was received. For supported path types, this path is
-    ///   already reversed such that it can be used directly to send reply packets; for unsupported
-    ///   path types, the path is copied unmodified.
-    pub async fn recv_from_with_path(
-        &self,
-        buffer: &mut [u8],
-    ) -> Result<(usize, SocketAddr, Path), ReceiveError> {
-        if buffer.is_empty() {
-            return Err(ReceiveError::ZeroLengthBuffer);
-        }
-        if buffer.len() < DataplanePath::<Bytes>::MAX_LEN {
-            return Err(ReceiveError::PathBufferTooShort);
-        }
-
-        // TODO(jsmith): Refactor to accept two buffers and return a Path referring into one.
-        let split_point = buffer.len() - DataplanePath::<Bytes>::MAX_LEN;
-        let (buffer, path_buf) = buffer.split_at_mut(split_point);
-
-        let (packet_len, sender, path) = self.inner.recv_loop(buffer, Some(path_buf)).await?;
-        let Path {
-            dataplane_path,
-            underlay_next_hop,
-            isd_asn,
-            ..
-        } = path.expect("non-None path since path_buf was provided");
-
-        // Explicit match here in case we add other errors to the `reverse` method at some point
-        let dataplane_path = match dataplane_path.to_reversed() {
-            Ok(reversed_dataplane) => reversed_dataplane,
-            Err(UnsupportedPathType(_)) => dataplane_path.into(),
-        };
-
-        Ok((
-            packet_len,
-            sender,
-            Path::new(dataplane_path, isd_asn.into_reversed(), underlay_next_hop),
-        ))
-    }
-
-    /// Receive a SCION UDP packet with path information.
-    ///
-    /// This behaves like [`Self::recv`] but additionally returns the path over which the packet was
-    /// received. For supported path types, this path is already reversed such that it can be used
-    /// directly to send reply packets; for unsupported path types, the path is copied unmodified.
-    pub async fn recv_with_path(&self, buffer: &mut [u8]) -> Result<(usize, Path), ReceiveError> {
-        let (packet_len, _, path) = self.recv_from_with_path(buffer).await?;
-        Ok((packet_len, path))
-    }
-
-    /// Returns the remote SCION address set for this socket, if any.
-    pub fn remote_addr(&self) -> Option<SocketAddr> {
-        self.inner.remote_addr()
-    }
-
-    /// Returns the SCION path set for this socket, if any.
-    pub fn path(&self) -> Option<Path> {
-        self.inner.path()
-    }
-
     /// Registers a remote address for this socket.
     pub fn connect(&self, remote_address: SocketAddr) {
         self.inner.set_remote_address(Some(remote_address));
@@ -196,56 +82,58 @@ impl UdpSocket {
     pub fn disconnect(&self) {
         self.inner.set_remote_address(None);
     }
+}
 
-    /// Registers or clears a path for this socket.
-    pub fn set_path(&self, path: Option<Path>) -> &Self {
-        self.inner.set_path(path);
-        self
+#[async_trait::async_trait]
+impl AsyncScionDatagram for UdpSocket {
+    /// The type of the address used for sending and receiving datagrams.
+    type Addr = SocketAddr;
+
+    async fn recv_from_with_path<'p>(
+        &self,
+        buffer: &mut [u8],
+        path_buffer: &'p mut [u8],
+    ) -> Result<(usize, Self::Addr, Path<&'p mut [u8]>), ReceiveError> {
+        if buffer.is_empty() {
+            return Err(ReceiveError::ZeroLengthBuffer);
+        }
+        if path_buffer.len() < DataplanePath::<Bytes>::MAX_LEN {
+            return Err(ReceiveError::PathBufferTooShort);
+        }
+
+        let (len, sender, Some(path)) = self.inner.recv_loop(buffer, Some(path_buffer)).await?
+        else {
+            unreachable!("path is always returned when providing a buffer")
+        };
+        Ok((len, sender, path))
     }
 
-    /// Sends the payload using the registered remote address and path
-    ///
-    /// Returns an error if the remote address or path are unset
-    pub async fn send(&self, payload: Bytes) -> Result<(), SendError> {
-        self.inner.send_to_via(payload, None, None).await
-    }
-
-    /// Sends the payload to the specified destination using the registered path
-    ///
-    /// Returns an error if the path is unset
-    pub async fn send_to(&self, payload: Bytes, destination: SocketAddr) -> Result<(), SendError> {
+    async fn recv_from(&self, buffer: &mut [u8]) -> Result<(usize, Self::Addr), ReceiveError> {
         self.inner
-            .send_to_via(payload, Some(destination), None)
+            .recv_loop(buffer, None)
             .await
+            .map(|(len, addr, _)| (len, addr))
     }
 
-    /// Sends the payload to the registered destination using the specified path
-    ///
-    /// Returns an error if the remote address is unset
-    pub async fn send_via(&self, payload: Bytes, path: &Path) -> Result<(), SendError> {
-        self.inner.send_to_via(payload, None, Some(path)).await
-    }
-
-    /// Sends the payload to the specified remote address and path
-    pub async fn send_to_via(
+    async fn send_to_via(
         &self,
         payload: Bytes,
-        destination: SocketAddr,
+        destination: Self::Addr,
         path: &Path,
     ) -> Result<(), SendError> {
         self.inner
-            .send_to_via(payload, Some(destination), Some(path))
+            .send_to_via(payload, Some(destination), path)
             .await
     }
-}
 
-/// Error messages returned from the UDP socket.
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum ReceiveError {
-    #[error("attempted to receive with a zero-length buffer")]
-    ZeroLengthBuffer,
-    #[error("path buffer too short")]
-    PathBufferTooShort,
+    async fn send_via(&self, payload: Bytes, path: &Path) -> Result<(), SendError> {
+        self.inner.send_to_via(payload, None, path).await
+    }
+
+    /// Returns the remote address of the socket, if any.
+    fn remote_addr(&self) -> Option<Self::Addr> {
+        self.inner.remote_addr()
+    }
 }
 
 macro_rules! log_err {
@@ -269,7 +157,6 @@ impl UdpSocketInner {
             state: RwLock::new(Arc::new(State {
                 local_address,
                 remote_address: None,
-                path: None,
             })),
             stream: Mutex::new(stream),
         }
@@ -279,17 +166,16 @@ impl UdpSocketInner {
         &self,
         payload: Bytes,
         destination: Option<SocketAddr>,
-        path: Option<&Path>,
+        path: &Path,
     ) -> Result<(), SendError> {
         let state = self.state.read().unwrap().clone();
-        let path = path.or(state.path.as_ref()).ok_or(SendError::NoPath)?;
         let Some(destination) = destination.or(state.remote_address) else {
-            return Err(SendError::NotConnected);
+            return Err(ErrorKind::NotConnected.into());
         };
 
         if let Some(metadata) = &path.metadata {
             if metadata.expiration < Utc::now() {
-                return Err(SendError::PathExpired);
+                return Err(PathErrorKind::Expired.into());
             }
         }
 
@@ -301,7 +187,7 @@ impl UdpSocketInner {
                 socket_addr
             })
         } else {
-            return Err(SendError::NoUnderlayNextHop);
+            return Err(PathErrorKind::NoUnderlayNextHop.into());
         };
 
         let packet = ScionPacketUdp::new(
@@ -351,10 +237,15 @@ impl UdpSocketInner {
                     {
                         if let Some(path_buf) = path_buf {
                             let path_len = path.dataplane_path.raw().len();
-                            let dataplane_path =
-                                path.dataplane_path.copy_to_slice(&mut path_buf[..path_len]);
-                            let path =
-                                Path::new(dataplane_path, path.isd_asn, path.underlay_next_hop);
+                            let dataplane_path = path
+                                .dataplane_path
+                                .reverse_to_slice(&mut path_buf[..path_len]);
+
+                            let path = Path::new(
+                                dataplane_path,
+                                path.isd_asn.into_reversed(),
+                                path.underlay_next_hop,
+                            );
                             return Ok((packet_len, sender, Some(path)));
                         } else {
                             return Ok((packet_len, sender, None));
@@ -433,27 +324,18 @@ impl UdpSocketInner {
     pub fn set_remote_address(&self, remote_address: Option<SocketAddr>) {
         Arc::make_mut(&mut *self.state.write().unwrap()).remote_address = remote_address;
     }
-
-    pub fn path(&self) -> Option<Path> {
-        self.state.read().unwrap().path.clone()
-    }
-
-    pub fn set_path(&self, path: Option<Path>) {
-        Arc::make_mut(&mut *self.state.write().unwrap()).path = path;
-    }
 }
 
 #[derive(Debug, Clone)]
 struct State {
     local_address: SocketAddr,
     remote_address: Option<SocketAddr>,
-    path: Option<Path>,
 }
 
 #[cfg(test)]
 mod tests {
     use scion_proto::path::DataplanePath;
-    use tokio::{net::UnixStream, sync::Notify};
+    use tokio::net::UnixStream;
 
     use super::*;
 
@@ -509,6 +391,22 @@ mod tests {
             dispatcher.send_packet_via(Some(relay), packet).await?;
 
             Ok(())
+        }
+
+        pub async fn recv_from_helper<'p>(
+            socket: &UdpSocket,
+            buffer: &mut [u8],
+            path_buffer: &'p mut [u8],
+            use_from: bool,
+        ) -> Result<(usize, Option<SocketAddr>, Path<&'p mut [u8]>), ReceiveError> {
+            if use_from {
+                let (len, remote_addr, path) =
+                    socket.recv_from_with_path(buffer, path_buffer).await?;
+                Ok((len, Some(remote_addr), path))
+            } else {
+                let (len, path) = socket.recv_with_path(buffer, path_buffer).await?;
+                Ok((len, None, path))
+            }
         }
     }
 
@@ -588,12 +486,11 @@ mod tests {
                 .await
                 .expect_err("should fail on unconnected socket");
 
-            assert!(
-                matches!(err, SendError::NotConnected),
-                "expected {:?}, got {:?}",
-                SendError::NotConnected,
-                err
-            );
+            if let SendError::Io(io_err) = err {
+                assert_eq!(io_err.kind(), ErrorKind::NotConnected);
+            } else {
+                panic!("expected Io(ErrorKind::NotConnected), got {}", err);
+            }
 
             Ok(())
         }
@@ -629,23 +526,25 @@ mod tests {
         };
         assert_eq!(endpoints.source.isd_asn(), endpoints.destination.isd_asn());
 
-        let mut buffer = vec![0u8; 1500];
+        let mut buffer = vec![0u8; 64];
+        let mut path_buffer = vec![0u8; 1024];
         let (socket, mut dispatcher) = utils::socket_from(endpoints.source)?;
         utils::local_send_raw(&mut dispatcher, endpoints, MESSAGE).await?;
 
-        let (length, incoming_remote_addr, incoming_path) = if use_from {
-            socket.recv_from_with_path(&mut buffer).await?
-        } else {
-            let res = socket.recv_with_path(&mut buffer).await?;
-            (res.0, endpoints.source, res.1)
-        };
+        let (length, incoming_remote_addr, incoming_path) =
+            utils::recv_from_helper(&socket, &mut buffer, &mut path_buffer, use_from).await?;
 
         assert_eq!(&buffer[..length], MESSAGE);
-        assert_eq!(incoming_remote_addr, endpoints.source);
-        assert_eq!(incoming_path.dataplane_path, DataplanePath::EmptyPath);
+        assert_eq!(
+            incoming_path.dataplane_path,
+            DataplanePath::<Bytes>::EmptyPath
+        );
         assert_eq!(incoming_path.isd_asn, endpoints.map(SocketAddr::isd_asn));
         assert_eq!(incoming_path.metadata, None);
         assert_ne!(incoming_path.underlay_next_hop, None);
+        if let Some(incoming_remote_addr) = incoming_remote_addr {
+            assert_eq!(incoming_remote_addr, endpoints.source);
+        }
 
         Ok(())
     }
@@ -673,7 +572,8 @@ mod tests {
         };
         assert_eq!(other_endpoints.source.isd_asn(), endpoints.source.isd_asn());
 
-        let mut buffer = vec![0u8; 1500];
+        let mut buffer = vec![0u8; 64];
+        let mut path_buffer = vec![0u8; 1024];
         let (socket, mut dispatcher) = utils::socket_from(endpoints.source)?;
 
         // Write packets to be received
@@ -688,30 +588,26 @@ mod tests {
         // Connect to the remote source
         socket.connect(endpoints.source);
 
-        let length = if use_from {
-            let (length, remote_addr, _) = socket.recv_from_with_path(&mut buffer).await?;
-            assert_eq!(remote_addr, endpoints.source);
-            length
-        } else {
-            socket.recv_with_path(&mut buffer).await?.0
-        };
+        let (length, remote_addr, _) =
+            utils::recv_from_helper(&socket, &mut buffer, &mut path_buffer, use_from).await?;
 
         // The first packet received is the second packet written.
         assert_eq!(&buffer[..length], messages[1]);
+        if let Some(remote_addr) = remote_addr {
+            assert_eq!(remote_addr, endpoints.source);
+        }
 
         // Disconnect the association to receive packets with other addresses
         socket.disconnect();
 
-        let length = if use_from {
-            let (length, remote_addr, _) = socket.recv_from_with_path(&mut buffer).await?;
-            assert_eq!(remote_addr, other_endpoints.source);
-            length
-        } else {
-            socket.recv_with_path(&mut buffer).await?.0
-        };
+        let (length, remote_addr, _) =
+            utils::recv_from_helper(&socket, &mut buffer, &mut path_buffer, use_from).await?;
 
         // The second packet packet received is the third packet written.
         assert_eq!(&buffer[..length], messages[2]);
+        if let Some(remote_addr) = remote_addr {
+            assert_eq!(remote_addr, other_endpoints.source);
+        }
 
         Ok(())
     }
@@ -739,18 +635,22 @@ mod tests {
             };
             assert_eq!(endpoints.source.isd_asn(), endpoints.destination.isd_asn());
 
-            let mut buffer = vec![0u8; 1500];
+            let mut buffer = vec![0u8; 64];
+            let mut path_buffer = vec![0u8; 1024];
+
             let (socket, mut dispatcher) = utils::socket_from(endpoints.source)?;
             utils::local_send_raw(&mut dispatcher, endpoints, MESSAGE).await?;
 
             let err = socket
-                .recv_from_with_path(&mut [])
+                .recv_from_with_path(&mut [], &mut path_buffer)
                 .await
                 .expect_err("should fail due to zero-length buffer");
             assert_eq!(err, ReceiveError::ZeroLengthBuffer);
 
             // The data should still be available to read
-            let (length, incoming_remote_addr, _) = socket.recv_from_with_path(&mut buffer).await?;
+            let (length, incoming_remote_addr, _) = socket
+                .recv_from_with_path(&mut buffer, &mut path_buffer)
+                .await?;
 
             assert_eq!(&buffer[..length], MESSAGE);
             assert_eq!(incoming_remote_addr, endpoints.source);
@@ -775,39 +675,40 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn set_path() -> TestResult {
-        let local_addr: SocketAddr = "[1-f:0:1,9.8.7.6]:80".parse()?;
-        let (socket, _) = utils::socket_from(local_addr)?;
-        let path = Path::local(local_addr.isd_asn());
+    // TODO(jsmith): Convert to test for for Pan socket
+    // #[tokio::test]
+    // async fn set_path() -> TestResult {
+    //     let local_addr: SocketAddr = "[1-f:0:1,9.8.7.6]:80".parse()?;
+    //     let (socket, _) = utils::socket_from(local_addr)?;
+    //     let path = Path::local(local_addr.isd_asn());
 
-        let notify = Arc::new(Notify::new());
-        let notify2 = Arc::new(Notify::new());
+    //     let notify = Arc::new(Notify::new());
+    //     let notify2 = Arc::new(Notify::new());
 
-        let (result1, result2) = tokio::join!(
-            async {
-                let initial = socket.path();
-                socket.set_path(Some(path.clone()));
-                notify.notify_one();
+    //     let (result1, result2) = tokio::join!(
+    //         async {
+    //             let initial = socket.path();
+    //             socket.set_path(Some(path.clone()));
+    //             notify.notify_one();
 
-                notify2.notified().await;
-                let last_set = socket.path();
+    //             notify2.notified().await;
+    //             let last_set = socket.path();
 
-                (initial, last_set)
-            },
-            async {
-                notify.notified().await;
-                let first_set = socket.path();
-                socket.set_path(None);
-                notify2.notify_one();
+    //             (initial, last_set)
+    //         },
+    //         async {
+    //             notify.notified().await;
+    //             let first_set = socket.path();
+    //             socket.set_path(None);
+    //             notify2.notify_one();
 
-                first_set
-            }
-        );
+    //             first_set
+    //         }
+    //     );
 
-        assert_eq!(result1, (None, None));
-        assert_eq!(result2, Some(path));
+    //     assert_eq!(result1, (None, None));
+    //     assert_eq!(result2, Some(path));
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }

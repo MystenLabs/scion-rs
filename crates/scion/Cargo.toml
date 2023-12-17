@@ -6,6 +6,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
+async-trait = "0.1.74"
 bytes = "1.5.0"
 chrono = { workspace = true, features = ["clock"] }
 scion-grpc = { version = "0.1.0", path = "../scion-grpc" }

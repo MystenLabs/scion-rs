@@ -3,6 +3,7 @@ use std::{sync::OnceLock, time::Duration};
 use bytes::Bytes;
 use scion::{
     daemon::{get_daemon_address, DaemonClient},
+    pan::AsyncScionDatagram,
     udp_socket::UdpSocket,
 };
 use scion_proto::{address::SocketAddr, packet::ByEndpoint, path::Path};
@@ -42,7 +43,6 @@ macro_rules! test_send_receive_reply {
                     .next()
                     .unwrap();
                 println!("Forward path: {:?}", path_forward.dataplane_path);
-                socket_source.set_path(Some(path_forward.clone()));
 
                 Ok((socket_source, socket_destination, path_forward))
             }
@@ -52,8 +52,10 @@ macro_rules! test_send_receive_reply {
             async fn message() -> TestResult {
                 let _lock = lock().lock().await;
 
-                let (socket_source, socket_destination, ..) = get_sockets().await?;
-                socket_source.send(MESSAGE.clone()).await?;
+                let (socket_source, socket_destination, path_forward) = get_sockets().await?;
+                socket_source
+                    .send_via(MESSAGE.clone(), &path_forward)
+                    .await?;
 
                 let mut buffer = vec![0_u8; 1500];
                 let (length, sender) =
@@ -70,12 +72,15 @@ macro_rules! test_send_receive_reply {
                 let _lock = lock().lock().await;
 
                 let (socket_source, socket_destination, path_forward) = get_sockets().await?;
-                socket_source.send(MESSAGE.clone()).await?;
+                socket_source
+                    .send_via(MESSAGE.clone(), &path_forward)
+                    .await?;
 
-                let mut buffer = vec![0_u8; 1500];
+                let mut buffer = vec![0_u8; 128];
+                let mut path_buffer = vec![0_u8; 1024];
                 let (length, sender, path) = tokio::time::timeout(
                     TIMEOUT,
-                    socket_destination.recv_from_with_path(&mut buffer),
+                    socket_destination.recv_from_with_path(&mut buffer, &mut path_buffer),
                 )
                 .await??;
                 assert_eq!(sender, socket_source.local_addr());
@@ -83,12 +88,14 @@ macro_rules! test_send_receive_reply {
 
                 println!("Reply path: {:?}", path.dataplane_path);
                 socket_destination
-                    .send_to_via(MESSAGE.clone(), sender, &path)
+                    .send_to_via(MESSAGE.clone(), sender, &path.into())
                     .await?;
 
-                let (_, path_return) =
-                    tokio::time::timeout(TIMEOUT, socket_source.recv_with_path(&mut buffer))
-                        .await??;
+                let (_, path_return) = tokio::time::timeout(
+                    TIMEOUT,
+                    socket_source.recv_with_path(&mut buffer, &mut path_buffer),
+                )
+                .await??;
                 assert_eq!(path_return.isd_asn, path_forward.isd_asn);
                 assert_eq!(path_return.dataplane_path, path_forward.dataplane_path);
 
