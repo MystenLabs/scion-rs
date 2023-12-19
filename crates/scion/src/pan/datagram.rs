@@ -190,3 +190,9 @@ where
         self.socket.remote_addr()
     }
 }
+
+impl<D, P> AsRef<D> for PathAwareDatagram<D, P> {
+    fn as_ref(&self) -> &D {
+        &self.socket
+    }
+}
