@@ -1,10 +1,7 @@
-#![allow(missing_docs)]
-
 //! A socket to send UDP datagrams via SCION.
-
 use std::{
     cmp,
-    io::{self, ErrorKind},
+    io,
     sync::{Arc, RwLock},
 };
 
@@ -25,11 +22,13 @@ use crate::{
     pan::{AsyncScionDatagram, PathErrorKind, ReceiveError, SendError},
 };
 
-#[allow(missing_docs)]
+/// Errors that may be raised when attempted to bind a [`UdpSocket`].
 #[derive(Debug, thiserror::Error)]
 pub enum BindError {
+    /// The UdpSocket was unable to connect to the dispatcher at the provided address.
     #[error("failed to connect to the dispatcher, reason: {0}")]
     DispatcherConnectFailed(#[from] io::Error),
+    /// An error which occurred during the registration handshake with the SCION dispatcher.
     #[error("failed to bind to the requested port")]
     RegistrationFailed(#[from] RegistrationError),
 }
@@ -42,20 +41,44 @@ impl From<UdpEncodeError> for SendError {
     }
 }
 
+/// A SCION UDP socket.
+///
+/// After creating a `UdpSocket` by binding it to a SCION socket address, data can
+/// be [sent to][AsyncScionDatagram::send_to_via] and [received from][AsyncScionDatagram::recv_from]
+/// any other socket address by using the methods on the [`AsyncScionDatagram`] trait.
+///
+/// As SCION is a path-aware internet architecture, sending packets with the `UdpSocket` allows
+/// specifying the path over which the packet should be sent. See
+/// [`PathAwareDatagram`][crate::pan::PathAwareDatagram] for a wrapping socket than handles
+/// the selection of paths.
+///
+/// Although UDP is a connectionless protocol, this implementation provides an interface to set an
+/// address where data should be sent and received from. After setting a remote address with
+/// [`connect`][UdpSocket::connect], data can be sent to and received from that address with the
+/// [`send_via`][AsyncScionDatagram::send_via] and [`recv`][AsyncScionDatagram::recv] methods.
 #[derive(Debug)]
 pub struct UdpSocket {
     inner: Arc<UdpSocketInner>,
 }
 
 impl UdpSocket {
+    /// Creates a new UDP socket bound to the provided SCION socket address.
     pub async fn bind(address: SocketAddr) -> Result<Self, BindError> {
         Self::bind_with_dispatcher(address, get_dispatcher_path()).await
     }
 
-    pub async fn bind_with_dispatcher<P: AsRef<std::path::Path> + std::fmt::Debug>(
+    /// Creates a new UDP socket from the given SCION socket address, by connecting to
+    /// and registering with the SCION dispatcher at the specified path.
+    ///
+    /// See [`bind`][Self::bind] for a variant that connects to the system's configured
+    /// SCION dispatcher .
+    pub async fn bind_with_dispatcher<P>(
         address: SocketAddr,
         dispatcher_path: P,
-    ) -> Result<Self, BindError> {
+    ) -> Result<Self, BindError>
+    where
+        P: AsRef<std::path::Path> + std::fmt::Debug,
+    {
         let mut stream = DispatcherStream::connect(dispatcher_path).await?;
         let local_address = stream.register(address).await?;
 
@@ -170,7 +193,7 @@ impl UdpSocketInner {
     ) -> Result<(), SendError> {
         let state = self.state.read().unwrap().clone();
         let Some(destination) = destination.or(state.remote_address) else {
-            return Err(ErrorKind::NotConnected.into());
+            return Err(io::ErrorKind::NotConnected.into());
         };
 
         if let Some(metadata) = &path.metadata {
@@ -487,7 +510,7 @@ mod tests {
                 .expect_err("should fail on unconnected socket");
 
             if let SendError::Io(io_err) = err {
-                assert_eq!(io_err.kind(), ErrorKind::NotConnected);
+                assert_eq!(io_err.kind(), io::ErrorKind::NotConnected);
             } else {
                 panic!("expected Io(ErrorKind::NotConnected), got {}", err);
             }
@@ -618,13 +641,16 @@ mod tests {
         pub const USE_FROM: bool = true;
 
         async_test_case! {
-            connected:
-                test_connected_recv(
-                    "[1-f:0:3,4.4.0.1]:80", "[1-f:0:3,11.10.13.7]:443", "[1-f:0:3,10.20.30.40]:981", USE_FROM
-                )
+            connected: test_connected_recv(
+                "[1-f:0:3,4.4.0.1]:80",
+                "[1-f:0:3,11.10.13.7]:443",
+                "[1-f:0:3,10.20.30.40]:981",
+                USE_FROM
+            )
         }
         async_test_case! {
-            unconnected: test_unconnected_recv("[1-f:0:3,4.4.0.1]:80", "[1-f:0:3,11.10.13.7]:443", USE_FROM)
+            unconnected:
+                test_unconnected_recv("[1-f:0:3,4.4.0.1]:80", "[1-f:0:3,11.10.13.7]:443", USE_FROM)
         }
 
         #[tokio::test]
@@ -667,48 +693,15 @@ mod tests {
         async_test_case! {
             connected:
                 test_connected_recv(
-                    "[1-f:0:3,4.4.0.1]:80", "[1-f:0:3,11.10.13.7]:443", "[1-f:0:3,10.20.30.40]:981", !USE_FROM
+                    "[1-f:0:3,4.4.0.1]:80",
+                    "[1-f:0:3,11.10.13.7]:443",
+                    "[1-f:0:3,10.20.30.40]:981",
+                    !USE_FROM
                 )
         }
         async_test_case! {
-            unconnected: test_unconnected_recv("[1-f:0:3,3.3.3.3]:80", "[1-f:0:3,9.9.9.81]:443", !USE_FROM)
+            unconnected:
+                test_unconnected_recv("[1-f:0:3,3.3.3.3]:80", "[1-f:0:3,9.9.9.81]:443", !USE_FROM)
         }
     }
-
-    // TODO(jsmith): Convert to test for for Pan socket
-    // #[tokio::test]
-    // async fn set_path() -> TestResult {
-    //     let local_addr: SocketAddr = "[1-f:0:1,9.8.7.6]:80".parse()?;
-    //     let (socket, _) = utils::socket_from(local_addr)?;
-    //     let path = Path::local(local_addr.isd_asn());
-
-    //     let notify = Arc::new(Notify::new());
-    //     let notify2 = Arc::new(Notify::new());
-
-    //     let (result1, result2) = tokio::join!(
-    //         async {
-    //             let initial = socket.path();
-    //             socket.set_path(Some(path.clone()));
-    //             notify.notify_one();
-
-    //             notify2.notified().await;
-    //             let last_set = socket.path();
-
-    //             (initial, last_set)
-    //         },
-    //         async {
-    //             notify.notified().await;
-    //             let first_set = socket.path();
-    //             socket.set_path(None);
-    //             notify2.notify_one();
-
-    //             first_set
-    //         }
-    //     );
-
-    //     assert_eq!(result1, (None, None));
-    //     assert_eq!(result2, Some(path));
-
-    //     Ok(())
-    // }
 }

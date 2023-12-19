@@ -1,12 +1,8 @@
-use std::{io::ErrorKind, sync::Arc};
+use std::{io, sync::Arc};
 
 use async_trait;
 use bytes::Bytes;
-use scion_proto::{
-    address::IsdAsn,
-    path::{DataplanePath, Path},
-};
-use tokio::sync::Mutex;
+use scion_proto::{address::IsdAsn, path::Path};
 
 use super::{AsyncPathService, ReceiveError, SendError};
 
@@ -27,8 +23,9 @@ pub trait AsyncScionDatagram {
     ///
     /// The returned path corresponds to the reversed path observed in the packet for known path
     /// types, or a copy of the opaque path data for unknown path types. In either case, the raw
-    /// raw data comprising the returned path is written to path_buffer, which must be at least
-    /// [DataplanePath::MAX_LEN][`DataplanePath::<Bytes>::MAX_LEN`] bytes in length.
+    /// data comprising the returned path is written to path_buffer, which must be at least
+    /// [`DataplanePath::MAX_LEN`][`scion_proto::path::DataplanePath::<Bytes>::MAX_LEN`] bytes in
+    /// length.
     async fn recv_from_with_path<'p>(
         &self,
         buffer: &mut [u8],
@@ -50,7 +47,7 @@ pub trait AsyncScionDatagram {
     ///
     /// Similar to [`Self::recv_from_with_path`], this receives the datagram into the provided
     /// buffer. However, as this does not return any information about the sender, this is
-    /// primarily used where the sender is already known, such as with connected sockets
+    /// primarily used where the sender is already known, such as with connected sockets.
     ///
     /// See [`Self::recv_from_with_path`] for more information.
     async fn recv_with_path<'p>(
@@ -66,7 +63,7 @@ pub trait AsyncScionDatagram {
     ///
     /// Similar to [`Self::recv_from_with_path`], this receives the datagram into the provided
     /// buffer. However, as this does not return any information about the sender, this is
-    /// primarily used where the sender is already known, such as with connected sockets
+    /// primarily used where the sender is already known, such as with connected sockets.
     ///
     /// In the case where neither the path nor the sender is needed, this method should be used
     /// instead of [`Self::recv_with_path`] as the implementation may avoid copying the path.
@@ -103,7 +100,6 @@ pub trait AsyncScionDatagram {
 pub struct PathAwareDatagram<D, P> {
     socket: D,
     path_service: Arc<P>,
-    path_buffer: Mutex<Vec<u8>>,
 }
 
 impl<D, P> PathAwareDatagram<D, P>
@@ -111,12 +107,11 @@ where
     D: AsyncScionDatagram + Send + Sync,
     P: AsyncPathService + Send + Sync,
 {
-    /// Creates a new socket that wraps the provided socket and path service.
+    /// Creates a new `PathAwareDatagram` socket that wraps the provided socket and path service.
     pub fn new(socket: D, path_service: Arc<P>) -> Self {
         Self {
             socket,
             path_service,
-            path_buffer: Mutex::new(vec![0u8; DataplanePath::<Bytes>::MAX_LEN]),
         }
     }
 
@@ -146,7 +141,7 @@ where
             let path = self.path_to(*remote_addr.as_ref()).await?;
             self.send_via(payload, path).await
         } else {
-            Err(SendError::Io(ErrorKind::NotConnected.into()))
+            Err(SendError::Io(io::ErrorKind::NotConnected.into()))
         }
     }
 
@@ -158,8 +153,6 @@ where
     }
 }
 
-// TODO(jsmith): We could allow the AsyncPathService to disable receiving paths from the network.
-// This could improve the performance in these special cases.
 #[async_trait::async_trait]
 impl<D, P> AsyncScionDatagram for PathAwareDatagram<D, P>
 where
@@ -173,31 +166,11 @@ where
         buffer: &mut [u8],
         path_buffer: &'p mut [u8],
     ) -> Result<(usize, Self::Addr, Path<&'p mut [u8]>), ReceiveError> {
-        let (len, sender, path) = self.socket.recv_from_with_path(buffer, path_buffer).await?;
-
-        self.path_service.maybe_add_path(&path);
-
-        Ok((len, sender, path))
+        self.socket.recv_from_with_path(buffer, path_buffer).await
     }
 
-    /// Receive a datagram and its sender.
-    ///
-    /// In order to observe the network path, this implementation of recv_from uses an internal
-    /// path_buffer guarded by a mutex. As a result, only one recv_from call can be ongoing at
-    /// a time. If multiple asynchronous recvs are desired, then use the recv_from_with_path
-    /// method instead.
-    ///
-    /// See the trait [`AsyncScionDatagram::recv_from_with_path`] for more information on the
-    /// method.
     async fn recv_from(&self, buffer: &mut [u8]) -> Result<(usize, Self::Addr), ReceiveError> {
-        // TODO(jsmith): Determine if we need to remove this mutex.
-        // The use of this mutex means only a single recv_from call be in progress at once. To await
-        // allow multiple calls we would likely need multiple buffers.
-        let mut path_buffer = self.path_buffer.lock().await;
-        let (len, sender, _) = self
-            .recv_from_with_path(buffer, path_buffer.as_mut_slice())
-            .await?;
-        Ok((len, sender))
+        self.socket.recv_from(buffer).await
     }
 
     async fn send_to_via(
@@ -206,12 +179,10 @@ where
         destination: Self::Addr,
         path: &Path,
     ) -> Result<(), SendError> {
-        self.path_service.maybe_add_shared_path(path);
         self.socket.send_to_via(payload, destination, path).await
     }
 
     async fn send_via(&self, payload: Bytes, path: &Path) -> Result<(), SendError> {
-        self.path_service.maybe_add_shared_path(path);
         self.socket.send_via(payload, path).await
     }
 

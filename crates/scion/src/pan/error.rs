@@ -1,4 +1,4 @@
-use std::{fmt::Display, io::ErrorKind};
+use std::{fmt::Display, io};
 
 use scion_proto::packet::{self, EncodeError};
 
@@ -29,7 +29,6 @@ impl Display for PathErrorKind {
 }
 
 /// Error returned when attempting to send a datagram on the SCION network.
-#[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
 pub enum SendError {
     /// An IO error raised from the OS or from the socket.
@@ -49,8 +48,8 @@ impl From<PathErrorKind> for SendError {
     }
 }
 
-impl From<ErrorKind> for SendError {
-    fn from(value: ErrorKind) -> Self {
+impl From<io::ErrorKind> for SendError {
+    fn from(value: io::ErrorKind) -> Self {
         Self::Io(value.into())
     }
 }
