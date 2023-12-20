@@ -29,7 +29,7 @@ use bytes::{Buf, BufMut};
 use super::wire_utils::LAYER4_PORT_OCTETS;
 use crate::{
     address::{HostType, IsdAsn, ServiceAddr, SocketAddr as ScionSocketAddr},
-    datagram::UdpDatagram,
+    datagram::UdpMessage,
     reliable::{
         wire_utils::{encoded_address_and_port_length, encoded_address_length},
         ADDRESS_TYPE_OCTETS,
@@ -85,7 +85,7 @@ impl RegistrationRequest {
 
         self.encode_command_flag(buffer);
 
-        buffer.put_u8(UdpDatagram::PROTOCOL_NUMBER);
+        buffer.put_u8(UdpMessage::PROTOCOL_NUMBER);
         buffer.put_u64(self.isd_asn.as_u64());
 
         encode_address(buffer, &self.public_address);

@@ -2,4 +2,5 @@
 
 pub mod daemon;
 pub mod dispatcher;
+pub mod pan;
 pub mod udp_socket;

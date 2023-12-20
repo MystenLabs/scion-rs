@@ -61,7 +61,7 @@ impl From<u8> for PathType {
 pub struct UnsupportedPathType(pub u8);
 
 /// Dataplane path found in a SCION packet.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum DataplanePath<T = Bytes> {
     /// The empty path type, used for intra-AS hops.
     EmptyPath,
@@ -131,6 +131,17 @@ where
         }
     }
 
+    /// Reverse the path to the provided slice.
+    ///
+    /// Unsupported path types are copied to the slice, as is.
+    pub fn reverse_to_slice<'b>(&self, buffer: &'b mut [u8]) -> DataplanePath<&'b mut [u8]> {
+        match self {
+            DataplanePath::EmptyPath => DataplanePath::EmptyPath,
+            DataplanePath::Standard(path) => DataplanePath::Standard(path.reverse_to_slice(buffer)),
+            DataplanePath::Unsupported { .. } => self.copy_to_slice(buffer),
+        }
+    }
+
     /// Reverses the path.
     pub fn to_reversed(&self) -> Result<DataplanePath, UnsupportedPathType> {
         match self {
@@ -185,6 +196,30 @@ impl From<DataplanePath<&mut [u8]>> for DataplanePath<Bytes> {
 impl From<StandardPath> for DataplanePath {
     fn from(value: StandardPath) -> Self {
         Self::Standard(value)
+    }
+}
+
+impl<T, U> PartialEq<DataplanePath<U>> for DataplanePath<T>
+where
+    T: Deref<Target = [u8]>,
+    U: Deref<Target = [u8]>,
+{
+    fn eq(&self, other: &DataplanePath<U>) -> bool {
+        match (self, other) {
+            (Self::Standard(lhs), DataplanePath::Standard(rhs)) => lhs.raw() == rhs.raw(),
+            (
+                Self::Unsupported {
+                    path_type: l_path_type,
+                    bytes: l_bytes,
+                },
+                DataplanePath::Unsupported {
+                    path_type: r_path_type,
+                    bytes: r_bytes,
+                },
+            ) => l_path_type == r_path_type && l_bytes.deref() == r_bytes.deref(),
+            (Self::EmptyPath, DataplanePath::EmptyPath) => true,
+            _ => false,
+        }
     }
 }
 
@@ -275,7 +310,7 @@ mod tests {
 
     #[test]
     fn reverse_empty() {
-        let dataplane_path = DataplanePath::EmptyPath;
+        let dataplane_path = DataplanePath::<Bytes>::EmptyPath;
         let reverse_path = dataplane_path.to_reversed().unwrap();
         assert_eq!(dataplane_path, reverse_path);
         assert_eq!(reverse_path.to_reversed().unwrap(), dataplane_path);

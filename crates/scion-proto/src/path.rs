@@ -3,7 +3,7 @@
 //! This module contains types for SCION paths and metadata as well as encoding and decoding
 //! functions.
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, ops::Deref};
 
 use bytes::Bytes;
 use scion_grpc::daemon::v1 as daemon_grpc;
@@ -27,7 +27,7 @@ pub mod epic;
 pub use epic::EpicAuths;
 
 /// A SCION end-to-end path with optional metadata.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Path<T = Bytes> {
     /// The raw bytes to be added as the path header to SCION dataplane packets.
     pub dataplane_path: DataplanePath<T>,
@@ -122,6 +122,29 @@ impl Path<Bytes> {
             isd_asn,
             metadata,
         })
+    }
+}
+
+impl From<Path<&mut [u8]>> for Path<Bytes> {
+    fn from(value: Path<&mut [u8]>) -> Self {
+        Self {
+            dataplane_path: value.dataplane_path.into(),
+            underlay_next_hop: value.underlay_next_hop,
+            isd_asn: value.isd_asn,
+            metadata: value.metadata,
+        }
+    }
+}
+
+impl<T> PartialEq for Path<T>
+where
+    T: Deref<Target = [u8]>,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.dataplane_path == other.dataplane_path
+            && self.underlay_next_hop == other.underlay_next_hop
+            && self.isd_asn == other.isd_asn
+            && self.metadata == other.metadata
     }
 }
 

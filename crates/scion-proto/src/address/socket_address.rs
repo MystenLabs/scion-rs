@@ -113,6 +113,16 @@ impl SocketAddr {
     }
 }
 
+impl AsRef<IsdAsn> for SocketAddr {
+    fn as_ref(&self) -> &IsdAsn {
+        match self {
+            SocketAddr::V4(addr) => addr.as_ref(),
+            SocketAddr::V6(addr) => addr.as_ref(),
+            SocketAddr::Svc(addr) => addr.as_ref(),
+        }
+    }
+}
+
 impl From<SocketAddrV4> for SocketAddr {
     /// Converts a [`SocketAddrV4`] into a [`SocketAddr::V4`].
     #[inline]
@@ -242,6 +252,12 @@ macro_rules! socket_address {
                     .ok_or(AddressParseError($kind))?;
 
                 Ok(Self {scion_addr, port })
+            }
+        }
+
+        impl AsRef<IsdAsn> for $name {
+            fn as_ref(&self) -> &IsdAsn {
+                self.scion_addr.as_ref()
             }
         }
     };

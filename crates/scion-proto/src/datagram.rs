@@ -30,7 +30,7 @@ pub enum UdpEncodeError {
 ///
 /// [RFC]: https://www.ietf.org/archive/id/draft-dekater-scion-dataplane-00.html
 #[derive(Debug, Default, PartialEq)]
-pub struct UdpDatagram {
+pub struct UdpMessage {
     /// The source and destination ports
     pub port: ByEndpoint<u16>,
     /// The length of the header and payload
@@ -41,7 +41,7 @@ pub struct UdpDatagram {
     pub payload: Bytes,
 }
 
-impl UdpDatagram {
+impl UdpMessage {
     /// SCION protocol number for UDP.
     ///
     /// See the [IETF SCION-dataplane RFC draft][rfc] for possible values.
@@ -89,7 +89,7 @@ impl UdpDatagram {
     }
 }
 
-impl WireEncodeVec<2> for UdpDatagram {
+impl WireEncodeVec<2> for UdpMessage {
     type Error = InadequateBufferSize;
 
     fn encode_with_unchecked(&self, buffer: &mut BytesMut) -> [Bytes; 2] {
@@ -111,11 +111,11 @@ impl WireEncodeVec<2> for UdpDatagram {
     }
 }
 
-impl<T: Buf> WireDecode<T> for UdpDatagram {
+impl<T: Buf> WireDecode<T> for UdpMessage {
     type Error = UdpDecodeError;
 
     fn decode(data: &mut T) -> Result<Self, Self::Error> {
-        if data.remaining() < UdpDatagram::HEADER_LEN {
+        if data.remaining() < UdpMessage::HEADER_LEN {
             return Err(Self::Error::DatagramEmptyOrTruncated);
         }
 
@@ -161,7 +161,7 @@ mod tests {
                 destination: MaybeEncoded::Decoded(Ipv4Addr::from_str("10.0.0.2")?.into()),
             },
         };
-        let mut datagram = UdpDatagram::new(
+        let mut datagram = UdpMessage::new(
             ByEndpoint {
                 source: 10001,
                 destination: 10002,
@@ -193,7 +193,7 @@ mod tests {
         let mut encoded_bytes = BytesMut::new();
         encoded_bytes.put(encoded_datagram[0].clone());
         encoded_bytes.put(encoded_datagram[1].clone());
-        assert_eq!(UdpDatagram::decode(&mut encoded_bytes.freeze())?, datagram);
+        assert_eq!(UdpMessage::decode(&mut encoded_bytes.freeze())?, datagram);
 
         Ok(())
     }

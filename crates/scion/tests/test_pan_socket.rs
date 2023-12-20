@@ -3,7 +3,7 @@ use std::{sync::OnceLock, time::Duration};
 use bytes::Bytes;
 use scion::{
     daemon::{get_daemon_address, DaemonClient},
-    pan::AsyncScionDatagram,
+    pan::{AsyncScionDatagram, PathAwareDatagram},
     udp_socket::UdpSocket,
 };
 use scion_proto::{address::SocketAddr, packet::ByEndpoint, path::Path};
@@ -25,7 +25,8 @@ macro_rules! test_send_receive_reply {
                 LOCK.get_or_init(|| Mutex::default())
             }
 
-            async fn get_sockets() -> TestResult<(UdpSocket, UdpSocket, Path)> {
+            async fn get_sockets(
+            ) -> TestResult<(PathAwareDatagram<UdpSocket, Path>, UdpSocket, Path)> {
                 let endpoints: ByEndpoint<SocketAddr> = ByEndpoint {
                     source: $source.parse().unwrap(),
                     destination: $destination.parse().unwrap(),
@@ -44,6 +45,9 @@ macro_rules! test_send_receive_reply {
                     .unwrap();
                 println!("Forward path: {:?}", path_forward.dataplane_path);
 
+                let socket_source =
+                    PathAwareDatagram::new(socket_source, path_forward.clone().into());
+
                 Ok((socket_source, socket_destination, path_forward))
             }
 
@@ -52,16 +56,14 @@ macro_rules! test_send_receive_reply {
             async fn message() -> TestResult {
                 let _lock = lock().lock().await;
 
-                let (socket_source, socket_destination, path_forward) = get_sockets().await?;
-                socket_source
-                    .send_via(MESSAGE.clone(), &path_forward)
-                    .await?;
+                let (socket_source, socket_destination, _) = get_sockets().await?;
+                socket_source.send(MESSAGE.clone()).await?;
 
                 let mut buffer = vec![0_u8; 1500];
                 let (length, sender) =
                     tokio::time::timeout(TIMEOUT, socket_destination.recv_from(&mut buffer))
                         .await??;
-                assert_eq!(sender, socket_source.local_addr());
+                assert_eq!(sender, socket_source.as_ref().local_addr());
                 assert_eq!(buffer[..length], MESSAGE[..]);
                 Ok(())
             }
@@ -72,9 +74,7 @@ macro_rules! test_send_receive_reply {
                 let _lock = lock().lock().await;
 
                 let (socket_source, socket_destination, path_forward) = get_sockets().await?;
-                socket_source
-                    .send_via(MESSAGE.clone(), &path_forward)
-                    .await?;
+                socket_source.send(MESSAGE.clone()).await?;
 
                 let mut buffer = vec![0_u8; 128];
                 let mut path_buffer = vec![0_u8; 1024];
@@ -83,13 +83,14 @@ macro_rules! test_send_receive_reply {
                     socket_destination.recv_from_with_path(&mut buffer, &mut path_buffer),
                 )
                 .await??;
-                assert_eq!(sender, socket_source.local_addr());
+                assert_eq!(sender, socket_source.as_ref().local_addr());
                 assert_eq!(buffer[..length], MESSAGE[..]);
 
                 println!("Reply path: {:?}", path.dataplane_path);
-                socket_destination
-                    .send_to_via(MESSAGE.clone(), sender, &path.into())
-                    .await?;
+                let path: Path = path.into();
+                let socket_destination = PathAwareDatagram::new(socket_destination, path.into());
+
+                socket_destination.send_to(MESSAGE.clone(), sender).await?;
 
                 let (_, path_return) = tokio::time::timeout(
                     TIMEOUT,

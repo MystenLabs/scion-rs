@@ -62,6 +62,16 @@ impl ScionAddr {
     }
 }
 
+impl AsRef<IsdAsn> for ScionAddr {
+    fn as_ref(&self) -> &IsdAsn {
+        match self {
+            ScionAddr::V4(addr) => addr.as_ref(),
+            ScionAddr::V6(addr) => addr.as_ref(),
+            ScionAddr::Svc(addr) => addr.as_ref(),
+        }
+    }
+}
+
 macro_rules! impl_from {
     ($base:ty, $variant:expr) => {
         impl From<$base> for ScionAddr {
@@ -152,6 +162,12 @@ macro_rules! scion_address {
         impl From<(IsdAsn, $host_type)> for $name {
             fn from((isd_asn, host): (IsdAsn, $host_type)) -> Self {
                 Self { isd_asn, host }
+            }
+        }
+
+        impl AsRef<IsdAsn> for $name {
+            fn as_ref(&self) -> &IsdAsn {
+                &self.isd_asn
             }
         }
 
