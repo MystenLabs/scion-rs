@@ -138,6 +138,7 @@ where
     /// Send a datagram using [`AsyncScionDatagram::send_via`] with a path from the path service.
     pub async fn send(&self, payload: Bytes) -> Result<(), SendError> {
         if let Some(remote_addr) = self.remote_addr() {
+            // Use send_via here as it maintains the connected semantics of the function call.
             let path = self.path_to(*remote_addr.as_ref()).await?;
             self.send_via(payload, path).await
         } else {
