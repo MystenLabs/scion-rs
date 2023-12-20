@@ -20,11 +20,14 @@ pub use dataplane::{DataplanePath, PathType, UnsupportedPathType};
 pub mod standard;
 pub use standard::StandardPath;
 
-mod metadata;
-pub use metadata::{GeoCoordinates, LinkType, PathInterface, PathMetadata};
-
 pub mod epic;
 pub use epic::EpicAuths;
+
+mod fingerprint;
+pub use fingerprint::{FingerprintError, PathFingerprint};
+
+mod metadata;
+pub use metadata::{GeoCoordinates, LinkType, PathInterface, PathMetadata};
 
 /// A SCION end-to-end path with optional metadata.
 #[derive(Debug, Clone)]
@@ -75,6 +78,13 @@ impl<T> Path<T> {
 
     pub fn is_empty(&self) -> bool {
         self.dataplane_path.is_empty()
+    }
+
+    /// Returns a fingerprint of the path.
+    ///
+    /// See [`PathFingerprint`] for more details.
+    pub fn fingerprint(&self) -> Result<PathFingerprint, FingerprintError> {
+        PathFingerprint::try_from(self)
     }
 }
 
