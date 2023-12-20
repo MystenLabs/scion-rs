@@ -246,6 +246,8 @@ impl WireDecode<Bytes> for StandardPath {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU16;
+
     use bytes::BufMut;
 
     use super::*;
@@ -421,4 +423,149 @@ mod tests {
         path_bytes! {info: 0, hop: 3, seg_lengths: [3, 7, 0]},
         DataplanePathErrorKind::HopFieldOutOfRange
     );
+
+    fn assert_ifaces_eq(hop_fields: HopFields<'_>, interfaces: &[(u16, u16)]) {
+        fn interface_or_zero(iface: Option<NonZeroU16>) -> u16 {
+            iface.map(NonZeroU16::get).unwrap_or_default()
+        }
+
+        let hop_interfaces: Vec<_> = hop_fields
+            .map(|hop| {
+                (
+                    interface_or_zero(hop.cons_ingress_interface()),
+                    interface_or_zero(hop.cons_egress_interface()),
+                )
+            })
+            .collect();
+        assert_eq!(hop_interfaces, interfaces);
+    }
+
+    macro_rules! test_iterators {
+        ($name:ident: { path: $path_bytes:expr, times: $times:expr, interfaces: $interfaces:expr }) => {
+            mod $name {
+                use super::*;
+
+                type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+                #[test]
+                fn info_fields() -> TestResult {
+                    let path_bytes: Vec<&[u8]> = $path_bytes;
+                    let path = StandardPath::decode(&mut Bytes::from(path_bytes.concat()))?;
+                    let times: &[i64] = &$times;
+
+                    let info_field_times: Vec<_> = path
+                        .info_fields()
+                        .map(|info| info.timestamp().timestamp())
+                        .collect();
+                    assert_eq!(times, info_field_times);
+
+                    Ok(())
+                }
+
+                #[test]
+                fn hop_fields() -> TestResult {
+                    let path_bytes: Vec<&[u8]> = $path_bytes;
+                    let path = StandardPath::decode(&mut Bytes::from(path_bytes.concat()))?;
+
+                    let interfaces: &[&[(u16, u16)]] = &$interfaces;
+                    let interfaces: Vec<(u16, u16)> = interfaces
+                        .iter()
+                        .map(|l| l.iter())
+                        .flatten()
+                        .cloned()
+                        .collect();
+
+                    assert_ifaces_eq(path.hop_fields(), &interfaces);
+
+                    Ok(())
+                }
+
+                #[test]
+                fn segments() -> TestResult {
+                    let path_bytes: Vec<&[u8]> = $path_bytes;
+                    let path = StandardPath::decode(&mut Bytes::from(path_bytes.concat()))?;
+                    let times: &[i64] = &$times;
+                    let interfaces: &[&[(u16, u16)]] = &$interfaces;
+
+                    assert_eq!(path.segments().len(), times.len());
+                    for (i, segment) in path.segments().enumerate() {
+                        assert_eq!(segment.info_field().timestamp().timestamp(), times[i]);
+                        assert_ifaces_eq(segment.hop_fields(), interfaces[i]);
+                    }
+
+                    Ok(())
+                }
+            }
+        };
+    }
+
+    test_iterators! {
+        one_segment_path: {
+            path: vec![
+                b"\x00\x00\x10\x00",
+                // Info
+                b"\x3c\x84\x86\x84",
+                b"\xa9\xf0\x7c\xce",
+                // Hop
+                b"\x13\xf7\xb4\x8a",
+                b"\xc4\x8a\xc6\x3c",
+                b"\xb7\xb1\x94\x9c",
+            ],
+            times: [0xa9f07cce],
+            interfaces: [&[(0xb48a, 0xc48a)]]
+        }
+    }
+
+    test_iterators! {
+        two_segment_path: {
+            path: vec![
+                b"\x00\x00\x10\x80",
+                // Info-1
+                b"\x07\x2d\x19\xcd",
+                b"\x76\x5d\xd0\xdf",
+                // Info-2
+                b"\xfb\xc7\xe6\xbd",
+                b"\x2a\xb4\x7c\x18",
+                // Hop-1-1
+                b"\x0f\xb8\x40\x22\x19\x90\xb7\x06\xb3\xe1\x97\x66",
+                // Hop-2-1, Hop-2-2
+                b"\x66\xba\x03\x8d\xdd\x4e\xd0\x7f\xda\xce\xfe\x81",
+                b"\xce\x4e\x99\x9e\x52\x74\xc1\x52\xfc\x72\x0c\x35",
+            ],
+            times: [0x765dd0df, 0x2ab47c18],
+            interfaces: [&[(0x4022, 0x1990)], &[(0x038d, 0xdd4e), (0x999e, 0x5274)]]
+        }
+    }
+
+    test_iterators! {
+        three_segment_path: {
+            path: vec![
+                b"\x00\x00\x10\x83",
+                // Info-1
+                b"\x2e\x48\x83\xd9",
+                b"\xa3\x1a\xb4\x21",
+                // Info-2
+                b"\x81\xbc\xbe\xfd",
+                b"\xd7\x76\x72\xf2",
+                // Info-3
+                b"\x1c\x40\x75\xf3",
+                b"\xd3\x48\x21\x61",
+                // Hop-1-1
+                b"\x6b\x80\xa9\xb7\x25\x58\xbe\xa8\x7c\x1e\x93\x71",
+                // Hop-2-1, Hop-2-2
+                b"\x97\xca\xc2\xb6\x91\x99\x75\x2d\x7a\x6a\xa4\x9f",
+                b"\x67\x83\xea\x67\x39\x02\x05\x49\xe6\x0a\xe7\x36",
+                // Hop-3-1, Hop-3-2, Hop-3-3
+                b"\xb5\x83\xd1\xf7\x27\xbf\xc2\x95\x1a\xdc\x05\x5f",
+                b"\xcb\x66\x78\xca\xa6\xb0\x8e\x1b\x92\x4c\x79\xa5",
+                b"\xf9\x77\x08\xde\xdf\x39\xef\xa9\x10\x40\x23\xca",
+            ],
+            times: [0xa31ab421, 0xd77672f2, 0xd3482161],
+            interfaces: [
+                &[(0xa9b7, 0x2558)],
+                &[(0xc2b6, 0x9199), (0xea67, 0x3902)],
+                &[(0xd1f7, 0x27bf), (0x78ca, 0xa6b0), (0x08de, 0xdf39)]
+            ]
+        }
+    }
 }
