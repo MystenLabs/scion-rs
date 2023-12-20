@@ -76,8 +76,9 @@ impl PathFingerprint {
         let mut hasher = Sha256::new();
 
         for interface in metadata.interfaces.iter() {
-            assert!(interface.is_some());
-            let interface = interface.unwrap();
+            let Some(interface) = interface else {
+                return Err(FingerprintError);
+            };
             hasher.update(interface.isd_asn.as_u64().to_be_bytes());
             hasher.update(u64::from(interface.id).to_be_bytes());
         }
