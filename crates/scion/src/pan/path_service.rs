@@ -9,8 +9,6 @@ pub enum PathLookupError {
 }
 
 /// Trait for asynchronously retrieving paths to SCION ASes.
-///
-/// If an implementation wants to receive paths from the network
 #[async_trait::async_trait]
 pub trait AsyncPathService {
     /// Return a path to the specified AS.

@@ -5,7 +5,7 @@ use bytes::Bytes;
 use super::{InadequateBufferSize, ScionHeaders, ScionPacketRaw};
 use crate::{
     address::SocketAddr,
-    datagram::{UdpDatagram, UdpDecodeError},
+    datagram::{UdpDecodeError, UdpMessage},
     packet::{ByEndpoint, EncodeError},
     path::Path,
     wire_encoding::{WireDecode, WireEncodeVec},
@@ -16,7 +16,7 @@ pub struct ScionPacketUdp {
     /// Packet headers
     pub headers: ScionHeaders,
     /// The contained UDP datagram
-    pub datagram: UdpDatagram,
+    pub datagram: UdpMessage,
 }
 
 impl ScionPacketUdp {
@@ -62,11 +62,11 @@ impl ScionPacketUdp {
         let headers = ScionHeaders::new(
             endhosts,
             path,
-            UdpDatagram::PROTOCOL_NUMBER,
-            payload.len() + UdpDatagram::HEADER_LEN,
+            UdpMessage::PROTOCOL_NUMBER,
+            payload.len() + UdpMessage::HEADER_LEN,
         )?;
         let mut datagram =
-            UdpDatagram::new(endhosts.map(|e| e.port()), payload).map_err(|_| todo!())?;
+            UdpMessage::new(endhosts.map(|e| e.port()), payload).map_err(|_| todo!())?;
         datagram.set_checksum(&headers.address);
 
         Ok(Self { headers, datagram })
@@ -77,14 +77,14 @@ impl TryFrom<ScionPacketRaw> for ScionPacketUdp {
     type Error = UdpDecodeError;
 
     fn try_from(mut value: ScionPacketRaw) -> Result<Self, Self::Error> {
-        if value.headers.common.next_header != UdpDatagram::PROTOCOL_NUMBER {
+        if value.headers.common.next_header != UdpMessage::PROTOCOL_NUMBER {
             return Err(UdpDecodeError::WrongProtocolNumber(
                 value.headers.common.next_header,
             ));
         }
         Ok(Self {
             headers: value.headers,
-            datagram: UdpDatagram::decode(&mut value.payload)?,
+            datagram: UdpMessage::decode(&mut value.payload)?,
         })
     }
 }

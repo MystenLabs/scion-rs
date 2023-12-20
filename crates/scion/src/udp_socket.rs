@@ -9,7 +9,7 @@ use bytes::Bytes;
 use chrono::Utc;
 use scion_proto::{
     address::SocketAddr,
-    datagram::{UdpDatagram, UdpEncodeError},
+    datagram::{UdpEncodeError, UdpMessage},
     packet::{ByEndpoint, ScionPacketRaw, ScionPacketUdp},
     path::{DataplanePath, Path},
     reliable::Packet,
@@ -47,7 +47,7 @@ impl From<UdpEncodeError> for SendError {
 /// be [sent to][AsyncScionDatagram::send_to_via] and [received from][AsyncScionDatagram::recv_from]
 /// any other socket address by using the methods on the [`AsyncScionDatagram`] trait.
 ///
-/// As SCION is a path-aware internet architecture, sending packets with the `UdpSocket` allows
+/// As SCION is a path-aware Internet architecture, sending packets with the `UdpSocket` allows
 /// specifying the path over which the packet should be sent. See
 /// [`PathAwareDatagram`][crate::pan::PathAwareDatagram] for a wrapping socket than handles
 /// the selection of paths.
@@ -298,7 +298,7 @@ impl UdpSocketInner {
             .map_err(log_err!("failed to decode SCION packet"))
             .ok()?;
 
-        let udp_datagram = UdpDatagram::decode(&mut scion_packet.payload)
+        let udp_datagram = UdpMessage::decode(&mut scion_packet.payload)
             .map_err(log_err!("failed to decode UDP datagram"))
             .ok()?;
 
