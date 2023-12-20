@@ -20,7 +20,7 @@ impl InfoField {
     /// Bitmask used to set the peering flag.
     pub const PEERING_FLAG: u8 = 0b10;
     /// Bitmask used to set the constructed direction flag.
-    pub const CONSTRUCTED_DIRECTION_FLAG: u8 = 0b01;
+    pub const CONSTRUCTION_DIRECTION_FLAG: u8 = 0b01;
 
     /// A view of an InfoField in a SCION standard path.
     ///
@@ -50,7 +50,7 @@ impl InfoField {
     /// Returns true if the hop fields in this segment are arranged in the direction
     /// they were constructed in during beaconing.
     pub fn is_constructed_dir(&self) -> bool {
-        (self.inner[0] & Self::CONSTRUCTED_DIRECTION_FLAG) != 0
+        (self.inner[0] & Self::CONSTRUCTION_DIRECTION_FLAG) != 0
     }
 
     /// Sets the construction direction flag.
@@ -59,15 +59,15 @@ impl InfoField {
     /// direction during beaconing. A value of false indicates that they have been reversed.
     pub fn set_constructed_dir(&mut self, is_constructed_dir: bool) {
         if is_constructed_dir {
-            self.inner[0] |= Self::CONSTRUCTED_DIRECTION_FLAG;
+            self.inner[0] |= Self::CONSTRUCTION_DIRECTION_FLAG;
         } else {
-            self.inner[0] ^= Self::CONSTRUCTED_DIRECTION_FLAG;
+            self.inner[0] &= !Self::CONSTRUCTION_DIRECTION_FLAG;
         }
     }
 
     /// Gets the timestamp set by the initiator of the corresponding beacon.
     ///
-    /// This timestamp can be used to determine the expiration time of each of hop field
+    /// This timestamp can be used to determine the expiration time of each hop field
     /// within the segment corresponding to this info field.
     pub fn timestamp(&self) -> DateTime<Utc> {
         let secs = Buf::get_u32(&mut &self.inner[4..]);
@@ -137,7 +137,7 @@ impl HopField {
         if enable {
             self.inner[0] |= Self::CONS_INGRESS_ALERT_FLAG;
         } else {
-            self.inner[0] ^= Self::CONS_INGRESS_ALERT_FLAG;
+            self.inner[0] &= !Self::CONS_INGRESS_ALERT_FLAG;
         }
     }
 
@@ -158,7 +158,7 @@ impl HopField {
         if enable {
             self.inner[0] |= Self::CONS_EGRESS_ALERT_FLAG;
         } else {
-            self.inner[0] ^= Self::CONS_EGRESS_ALERT_FLAG;
+            self.inner[0] &= !Self::CONS_EGRESS_ALERT_FLAG;
         }
     }
 
@@ -236,7 +236,7 @@ impl AsRef<[u8]> for HopField {
 macro_rules! field_iterator {
     (
         $(#[$outer:meta])*
-        pub struct $name:ident<$life:lifetime>{field_type: $field:tt}
+        pub struct $name:ident<$life:lifetime>{field_type: $field:ty}
     ) => {
         $(#[$outer])*
         #[derive(Debug, Clone)]
@@ -246,9 +246,9 @@ macro_rules! field_iterator {
 
         impl<$life> $name<$life> {
             pub(super) fn new(data: &'a [u8]) -> Self {
-                assert_eq!(data.len() % $field::LENGTH, 0);
+                assert_eq!(data.len() % <$field>::LENGTH, 0);
                 Self {
-                    inner: data.chunks_exact($field::LENGTH),
+                    inner: data.chunks_exact(<$field>::LENGTH),
                 }
             }
         }
@@ -257,13 +257,13 @@ macro_rules! field_iterator {
             type Item = &$life $field;
 
             fn next(&mut self) -> Option<Self::Item> {
-                self.inner.next().map($field::new)
+                self.inner.next().map(<$field>::new)
             }
         }
 
         impl<$life> DoubleEndedIterator for $name<$life> {
             fn next_back(&mut self) -> Option<Self::Item> {
-                self.inner.next_back().map($field::new)
+                self.inner.next_back().map(<$field>::new)
             }
         }
 
@@ -300,6 +300,73 @@ mod tests {
         };
     }
 
+    macro_rules! test_flag {
+        ($name:ident: {
+            field: $field:ty,
+            flag_mask: $mask:literal,
+            getter: $flag_getter:tt
+            $(, setter: $flag_setter:tt)?
+        }) => {
+            mod $name {
+                use super::*;
+
+                #[test]
+                fn getter() {
+                    let mut backing_array = [0u8; <$field>::LENGTH];
+
+                    let field = <$field>::new(&backing_array);
+                    assert!(!field.$flag_getter());
+
+                    backing_array[0] = $mask;
+
+                    let field = <$field>::new(&backing_array);
+                    assert!(field.$flag_getter());
+                }
+
+                $(
+                    #[test]
+                    fn setter() {
+                        let mut backing_array = [0u8; <$field>::LENGTH];
+                        backing_array[0] = !$mask;
+                        let field = <$field>::new_mut(&mut backing_array);
+
+                        assert!(!field.$flag_getter());
+                        field.$flag_setter(true);
+                        assert!(field.$flag_getter());
+
+                        let mut backing_array = [$mask; <$field>::LENGTH];
+                        backing_array[0] = $mask;
+                        let field = <$field>::new_mut(&mut backing_array);
+
+                        assert!(field.$flag_getter());
+                        field.$flag_setter(false);
+                        assert!(!field.$flag_getter());
+                    }
+
+                    #[test]
+                    fn idempotent_set() {
+                        let mut backing_array = [0u8; <$field>::LENGTH];
+                        backing_array[0] = !$mask;
+                        let field = <$field>::new_mut(&mut backing_array);
+
+                        assert!(!field.$flag_getter());
+                        field.$flag_setter(false);
+                        assert!(!field.$flag_getter());
+
+                        let mut backing_array = [$mask; <$field>::LENGTH];
+                        backing_array[0] = $mask;
+                        let field = <$field>::new_mut(&mut backing_array);
+
+                        assert!(field.$flag_getter());
+                        field.$flag_setter(true);
+                        assert!(field.$flag_getter());
+                    }
+
+                )?
+            }
+        };
+    }
+
     mod info_field {
         use super::*;
 
@@ -323,67 +390,43 @@ mod tests {
             );
         }
 
-        fn test_is_peering(info_data: &[u8], expected: bool) {
-            let info_field = InfoField::new(info_data);
-            assert_eq!(info_field.is_peering(), expected);
+        test_flag! {
+            peering_flag: {
+                field: InfoField,
+                flag_mask: 0b0000_0010,
+                getter: is_peering
+            }
         }
 
-        test_case!(peering_flag_unset: test_is_peering(&[0, 0, 0, 0, 0, 0, 0, 0], false));
-        test_case!(peering_flag_set: test_is_peering(&[0b10, 0, 0, 0, 0, 0, 0, 0], true));
-
-        #[test]
-        fn constructed_dir_flag() {
-            let mut info_data = [0_u8, 0, 0, 0, 0, 0, 0, 0];
-
-            let info_field = InfoField::new_mut(&mut info_data);
-            assert!(!info_field.is_constructed_dir());
-
-            info_field.set_constructed_dir(true);
-            assert!(info_field.is_constructed_dir());
-
-            info_field.set_constructed_dir(false);
-            assert!(!info_field.is_constructed_dir());
-
-            info_field.set_constructed_dir(true);
-            assert_eq!(info_data[0], 0b01);
+        test_flag! {
+            constructed_dir_flag: {
+                field: InfoField,
+                flag_mask: 0b0000_0001,
+                getter: is_constructed_dir,
+                setter: set_constructed_dir
+            }
         }
     }
 
     mod hop_field {
         use super::*;
 
-        #[test]
-        fn cons_ingress_router_alert_flag() {
-            let mut hop_data = [0_u8; 12];
-
-            let hop_field = HopField::new_mut(&mut hop_data);
-            assert!(!hop_field.is_cons_ingress_router_alert());
-
-            hop_field.set_cons_ingress_router_alert(true);
-            assert!(hop_field.is_cons_ingress_router_alert());
-
-            hop_field.set_cons_ingress_router_alert(false);
-            assert!(!hop_field.is_cons_ingress_router_alert());
-
-            hop_field.set_cons_ingress_router_alert(true);
-            assert_eq!(hop_data[0], 0b10);
+        test_flag! {
+            cons_ingress_router_alert_flag: {
+                field: HopField,
+                flag_mask: 0b0000_0010,
+                getter: is_cons_ingress_router_alert,
+                setter: set_cons_ingress_router_alert
+            }
         }
 
-        #[test]
-        fn cons_egress_router_alert_flag() {
-            let mut hop_data = [0_u8; 12];
-
-            let hop_field = HopField::new_mut(&mut hop_data);
-            assert!(!hop_field.is_cons_egress_router_alert());
-
-            hop_field.set_cons_egress_router_alert(true);
-            assert!(hop_field.is_cons_egress_router_alert());
-
-            hop_field.set_cons_egress_router_alert(false);
-            assert!(!hop_field.is_cons_egress_router_alert());
-
-            hop_field.set_cons_egress_router_alert(true);
-            assert_eq!(hop_data[0], 0b01);
+        test_flag! {
+            cons_egress_router_alert_flag: {
+                field: HopField,
+                flag_mask: 0b0000_0001,
+                getter: is_cons_egress_router_alert,
+                setter: set_cons_egress_router_alert
+            }
         }
 
         #[test]

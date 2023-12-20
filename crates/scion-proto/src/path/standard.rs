@@ -122,24 +122,24 @@ where
     /// Returns the segment at the specified index, if any.
     ///
     /// There are always at most 3 segments.
-    pub fn segment(&self, segment_idx: usize) -> Option<Segment> {
-        if let Some(info_field) = self.info_field(segment_idx) {
-            // Get the index of the first hop field in the segment.
-            // This is equivalent to the index after all preceding hop fields.
-            let hop_index = self.meta_header.segment_lengths[..segment_idx]
-                .iter()
-                .fold(0usize, |sum, seglen| sum + usize::from(seglen.get()));
+    pub fn segment(&self, segment_index: usize) -> Option<Segment> {
+        let Some(info_field) = self.info_field(segment_index) else {
+            return None;
+        };
 
-            let n_hop_fields: usize = self.meta_header.segment_lengths[segment_idx].get().into();
-            debug_assert_ne!(n_hop_fields, 0);
+        // Get the index of the first hop field in the segment.
+        // This is equivalent to the index after all preceding hop fields.
+        let hop_index = self.meta_header.segment_lengths[..segment_index]
+            .iter()
+            .fold(0usize, |sum, seglen| sum + usize::from(seglen.get()));
 
-            Some(Segment::new(
-                info_field,
-                self.hop_fields_subset(hop_index, n_hop_fields),
-            ))
-        } else {
-            None
-        }
+        let n_hop_fields: usize = self.meta_header.segment_lengths[segment_index].get().into();
+        debug_assert_ne!(n_hop_fields, 0);
+
+        Some(Segment::new(
+            info_field,
+            self.hop_fields_subset(hop_index, n_hop_fields),
+        ))
     }
 
     /// Returns an iterator over the segments of this path.
@@ -183,7 +183,7 @@ where
     fn write_reversed_info_fields_to(&self, buffer: &mut &mut [u8]) {
         for info_field in self.info_fields().rev() {
             let data = info_field.as_ref();
-            buffer.put_u8(data[0] ^ InfoField::CONSTRUCTED_DIRECTION_FLAG);
+            buffer.put_u8(data[0] ^ InfoField::CONSTRUCTION_DIRECTION_FLAG);
             buffer.put_slice(&data[1..]);
         }
     }
