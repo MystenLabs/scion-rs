@@ -5,6 +5,7 @@ pub mod datagram;
 pub mod packet;
 pub mod path;
 pub mod reliable;
+pub mod scmp;
 pub(crate) mod utils;
 pub mod wire_encoding;
 

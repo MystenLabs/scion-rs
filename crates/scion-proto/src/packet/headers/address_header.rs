@@ -63,6 +63,14 @@ impl From<ByEndpoint<SocketAddr>> for AddressHeader {
         }
     }
 }
+impl From<ByEndpoint<ScionAddr>> for AddressHeader {
+    fn from(value: ByEndpoint<ScionAddr>) -> Self {
+        AddressHeader {
+            ia: value.map(ScionAddr::isd_asn),
+            host: value.map(|e| MaybeEncoded::Decoded(e.host())),
+        }
+    }
+}
 
 impl<T: Buf> WireDecodeWithContext<T> for AddressHeader {
     type Error = DecodeError;
