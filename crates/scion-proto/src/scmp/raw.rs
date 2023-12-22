@@ -2,15 +2,9 @@
 
 use bytes::{Buf, BufMut, Bytes};
 
-use super::{
-    ScmpDecodeError,
-    ScmpMessageBase,
-    ScmpMessageChecksum,
-    ScmpType,
-    SCMP_PROTOCOL_NUMBER,
-};
+use super::{ScmpDecodeError, ScmpMessageBase, ScmpType, SCMP_PROTOCOL_NUMBER};
 use crate::{
-    packet::{AddressHeader, ChecksumDigest, InadequateBufferSize},
+    packet::{AddressHeader, ChecksumDigest, InadequateBufferSize, MessageChecksum},
     wire_encoding::{WireDecode, WireEncodeVec},
 };
 
@@ -53,7 +47,7 @@ impl ScmpMessageBase for ScmpMessageRaw {
     }
 }
 
-impl ScmpMessageChecksum for ScmpMessageRaw {
+impl MessageChecksum for ScmpMessageRaw {
     fn checksum(&self) -> u16 {
         self.checksum
     }

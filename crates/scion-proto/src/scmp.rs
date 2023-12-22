@@ -14,8 +14,6 @@ pub use messages::*;
 mod raw;
 pub use raw::ScmpMessageRaw;
 
-use crate::packet::AddressHeader;
-
 /// Trait implemented by all SCMP messages.
 pub trait ScmpMessageBase {
     /// Returns the SCMP type of this message.
@@ -24,23 +22,6 @@ pub trait ScmpMessageBase {
     /// Returns the additional SCMP code of this message.
     fn code(&self) -> u8 {
         0
-    }
-}
-
-/// Trait implemented by all SCMP messages to handle checksums.
-pub trait ScmpMessageChecksum: ScmpMessageBase {
-    /// Returns the currently stored checksum of the message.
-    fn checksum(&self) -> u16;
-
-    /// Clears then sets the checksum to the value returned by [`Self::calculate_checksum()`].
-    fn set_checksum(&mut self, address_header: &AddressHeader);
-
-    /// Compute the checksum for this SCMP message using the provided address header.
-    fn calculate_checksum(&self, address_header: &AddressHeader) -> u16;
-
-    /// Returns true if the checksum successfully verifies, otherwise false.
-    fn verify_checksum(&self, address_header: &AddressHeader) -> bool {
-        self.calculate_checksum(address_header) == 0
     }
 }
 

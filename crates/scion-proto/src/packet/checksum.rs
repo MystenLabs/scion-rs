@@ -6,6 +6,23 @@ use crate::{
     wire_encoding::{MaybeEncoded, WireEncode},
 };
 
+/// Trait implemented by all higher-layer messages that use 2-byte checksums.
+pub trait MessageChecksum {
+    /// Returns the currently stored checksum of the message.
+    fn checksum(&self) -> u16;
+
+    /// Clears then sets the checksum to the value returned by [`Self::calculate_checksum()`].
+    fn set_checksum(&mut self, address_header: &AddressHeader);
+
+    /// Compute the checksum for this message using the provided address header.
+    fn calculate_checksum(&self, address_header: &AddressHeader) -> u16;
+
+    /// Returns true if the checksum successfully verifies, otherwise false.
+    fn verify_checksum(&self, address_header: &AddressHeader) -> bool {
+        self.calculate_checksum(address_header) == 0
+    }
+}
+
 /// Incrementally computes the 16-bit checksum for upper layer protocols.
 ///
 /// A new, empty digest can be created with [`ChecksumDigest::new()`], or
