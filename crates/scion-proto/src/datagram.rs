@@ -3,7 +3,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use crate::{
-    packet::{AddressHeader, ByEndpoint, ChecksumDigest, InadequateBufferSize},
+    packet::{AddressHeader, ByEndpoint, ChecksumDigest, InadequateBufferSize, MessageChecksum},
     wire_encoding::{WireDecode, WireEncodeVec},
 };
 
@@ -65,9 +65,19 @@ impl UdpMessage {
         };
         Ok(datagram)
     }
+}
 
-    /// Compute the checksum for this datagram using the provided address header.
-    pub fn calculate_checksum(&self, address_header: &AddressHeader) -> u16 {
+impl MessageChecksum for UdpMessage {
+    fn checksum(&self) -> u16 {
+        self.checksum
+    }
+
+    fn set_checksum(&mut self, address_header: &AddressHeader) {
+        self.checksum = 0;
+        self.checksum = self.calculate_checksum(address_header);
+    }
+
+    fn calculate_checksum(&self, address_header: &AddressHeader) -> u16 {
         ChecksumDigest::with_pseudoheader(address_header, Self::PROTOCOL_NUMBER, self.length.into())
             .add_u16(self.port.source)
             .add_u16(self.port.destination)
@@ -75,17 +85,6 @@ impl UdpMessage {
             .add_u16(self.checksum)
             .add_slice(&self.payload)
             .checksum()
-    }
-
-    /// Returns true if the checksum successfully verifies, otherwise false.
-    pub fn verify_checksum(&self, address_header: &AddressHeader) -> bool {
-        self.calculate_checksum(address_header) == 0
-    }
-
-    /// Clears then sets the checksum to the value returned by [`Self::calculate_checksum()`].
-    pub fn set_checksum(&mut self, address_header: &AddressHeader) {
-        self.checksum = 0;
-        self.checksum = self.calculate_checksum(address_header);
     }
 }
 

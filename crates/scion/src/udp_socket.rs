@@ -10,7 +10,7 @@ use chrono::Utc;
 use scion_proto::{
     address::SocketAddr,
     datagram::{UdpEncodeError, UdpMessage},
-    packet::{ByEndpoint, ScionPacketRaw, ScionPacketUdp},
+    packet::{ByEndpoint, MessageChecksum, ScionPacketRaw, ScionPacketUdp},
     path::{DataplanePath, Path},
     reliable::Packet,
     wire_encoding::WireDecode,

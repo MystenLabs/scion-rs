@@ -2,16 +2,10 @@
 
 use bytes::{Buf, BufMut, Bytes};
 
-use super::{
-    ScmpDecodeError,
-    ScmpMessageBase,
-    ScmpMessageChecksum,
-    ScmpMessageRaw,
-    SCMP_PROTOCOL_NUMBER,
-};
+use super::{ScmpDecodeError, ScmpMessageBase, ScmpMessageRaw, SCMP_PROTOCOL_NUMBER};
 use crate::{
     address::IsdAsn,
-    packet::{AddressHeader, ChecksumDigest, InadequateBufferSize},
+    packet::{AddressHeader, ChecksumDigest, InadequateBufferSize, MessageChecksum},
     utils::encoded_type,
     wire_encoding::WireEncodeVec,
 };
@@ -169,7 +163,7 @@ impl WireEncodeVec<2> for ScmpMessage {
     lift_fn_from_scmp_variants!(fn required_capacity(&self) -> usize);
 }
 
-trait ScmpMessageEncodeDecode: ScmpMessageBase + ScmpMessageChecksum + Sized {
+trait ScmpMessageEncodeDecode: ScmpMessageBase + MessageChecksum + Sized {
     const INFO_BLOCK_LENGTH: usize;
 
     #[allow(unused_variables)]
@@ -221,7 +215,7 @@ impl<T: ScmpMessageEncodeDecode> WireEncodeVec<2> for T {
 }
 
 /// Trait implemented by all SCMP error messages.
-pub trait ScmpErrorMessage: ScmpMessageBase + ScmpMessageChecksum {
+pub trait ScmpErrorMessage: ScmpMessageBase + MessageChecksum {
     /// Get the (truncated) packet that triggered the error.
     fn get_offending_packet(&self) -> Bytes;
 }
@@ -266,8 +260,7 @@ macro_rules! impl_conversion_and_type {
             )?
         }
 
-        impl ScmpMessageChecksum for $name {
-
+        impl MessageChecksum for $name {
             fn checksum(&self) -> u16 {
                 self.checksum
             }
@@ -599,7 +592,7 @@ impl ScmpMessageEncodeDecode for ScmpInternalConnectivityDown {
 }
 
 /// Trait implemented by all SCMP informational messages.
-pub trait ScmpInformationalMessage: ScmpMessageBase + ScmpMessageChecksum {
+pub trait ScmpInformationalMessage: ScmpMessageBase + MessageChecksum {
     /// Get the message's identifier.
     fn get_identifier(&self) -> u16;
     /// Get the message's sequence number.

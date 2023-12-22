@@ -2,7 +2,7 @@
 
 use bytes::Bytes;
 
-use super::{InadequateBufferSize, ScionHeaders, ScionPacketRaw};
+use super::{InadequateBufferSize, MessageChecksum, ScionHeaders, ScionPacketRaw};
 use crate::{
     address::SocketAddr,
     datagram::{UdpDecodeError, UdpMessage},

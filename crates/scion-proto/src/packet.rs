@@ -27,4 +27,4 @@ pub mod udp;
 pub use udp::ScionPacketUdp;
 
 mod checksum;
-pub use checksum::ChecksumDigest;
+pub use checksum::{ChecksumDigest, MessageChecksum};
