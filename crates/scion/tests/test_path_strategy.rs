@@ -8,7 +8,7 @@ use scion::{
         AsyncScionDatagram,
         PathAwareDatagram,
     },
-    udp_socket::UdpSocket,
+    socket::UdpSocket,
 };
 use scion_proto::address::{IsdAsn, SocketAddr};
 

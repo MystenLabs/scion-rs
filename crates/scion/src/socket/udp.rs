@@ -1,4 +1,5 @@
 //! A socket to send UDP datagrams via SCION.
+
 use std::{
     cmp,
     io,
@@ -9,7 +10,7 @@ use bytes::Bytes;
 use chrono::Utc;
 use scion_proto::{
     address::SocketAddr,
-    datagram::{UdpEncodeError, UdpMessage},
+    datagram::UdpMessage,
     packet::{ByEndpoint, MessageChecksum, ScionPacketRaw, ScionPacketUdp},
     path::{DataplanePath, Path},
     reliable::Packet,
@@ -17,29 +18,11 @@ use scion_proto::{
 };
 use tokio::sync::Mutex;
 
+use super::BindError;
 use crate::{
-    dispatcher::{self, get_dispatcher_path, DispatcherStream, RegistrationError},
+    dispatcher::{self, get_dispatcher_path, DispatcherStream},
     pan::{AsyncScionDatagram, PathErrorKind, ReceiveError, SendError},
 };
-
-/// Errors that may be raised when attempted to bind a [`UdpSocket`].
-#[derive(Debug, thiserror::Error)]
-pub enum BindError {
-    /// The UdpSocket was unable to connect to the dispatcher at the provided address.
-    #[error("failed to connect to the dispatcher, reason: {0}")]
-    DispatcherConnectFailed(#[from] io::Error),
-    /// An error which occurred during the registration handshake with the SCION dispatcher.
-    #[error("failed to bind to the requested port")]
-    RegistrationFailed(#[from] RegistrationError),
-}
-
-impl From<UdpEncodeError> for SendError {
-    fn from(value: UdpEncodeError) -> Self {
-        match value {
-            UdpEncodeError::PayloadTooLarge => Self::PacketTooLarge,
-        }
-    }
-}
 
 /// A SCION UDP socket.
 ///

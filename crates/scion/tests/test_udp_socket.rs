@@ -4,7 +4,7 @@ use bytes::Bytes;
 use scion::{
     daemon::{get_daemon_address, DaemonClient},
     pan::AsyncScionDatagram,
-    udp_socket::UdpSocket,
+    socket::UdpSocket,
 };
 use scion_proto::{address::SocketAddr, packet::ByEndpoint, path::Path};
 use tokio::sync::Mutex;
