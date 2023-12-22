@@ -28,14 +28,33 @@ impl From<DataplanePathErrorKind> for DecodeError {
     }
 }
 
-/// Errors raised when failing to encode a [`super::ScionPacketRaw`] or [`super::ScionPacketUdp`].
-#[allow(missing_docs)]
+/// Errors raised when failing to encode a [`super::ScionPacketRaw`], [`super::ScionPacketScmp`], or
+/// [`super::ScionPacketUdp`].
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
 pub enum EncodeError {
+    /// The payload is too large to be properly encoded in a SCION packet.
     #[error("packet payload is too large")]
     PayloadTooLarge,
+    /// The overall header is too large.
+    ///
+    /// This is most likely due to a too long path.
     #[error("packet header is too large")]
     HeaderTooLarge,
+}
+
+/// Errors raised when creating a [`super::ScionPacketScmp`].
+#[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
+pub enum ScmpEncodeError {
+    /// Some SCMP messages (notably the [`ScmpTracerouteRequest`][crate::scmp::ScmpTracerouteRequest])
+    /// require a specific path type.
+    #[error("the provided path type is not appropriate for this type of packet")]
+    InappropriatePathType,
+    /// A provided parameter is out of range.
+    #[error("a provided parameter is out of range")]
+    ParameterOutOfRange,
+    /// A general [`EncodeError`] occurred.
+    #[error("encoding error")]
+    GeneralEncodeError(#[from] EncodeError),
 }
 
 /// Raised if the buffer does not have sufficient capacity for encoding the SCION headers.

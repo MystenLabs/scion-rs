@@ -11,13 +11,13 @@ pub use address_header::{AddressHeader, RawHostAddress};
 
 use super::{EncodeError, InadequateBufferSize};
 use crate::{
-    address::SocketAddr,
+    address::{ScionAddr, SocketAddr},
     path::{DataplanePath, Path},
     wire_encoding::WireEncode,
 };
 
 /// SCION packet headers.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScionHeaders {
     /// Metadata about the remaining headers and payload.
     pub common: CommonHeader,
@@ -28,13 +28,14 @@ pub struct ScionHeaders {
 }
 
 impl ScionHeaders {
-    /// Creates a new [`ScionHeaders`] object given the source and destination [`SocketAddr`],
-    /// the [`Path`], the next-header value, and the payload length
+    /// Creates a new [`ScionHeaders`] object given the source and destination [`ScionAddr`],
+    /// the [`Path`], the next-header value, and the payload length.
     pub fn new(
-        endhosts: &ByEndpoint<SocketAddr>,
+        endhosts: &ByEndpoint<ScionAddr>,
         path: &Path,
         next_header: u8,
         payload_length: usize,
+        flow_id: FlowId,
     ) -> Result<Self, EncodeError> {
         let address_header = AddressHeader::from(*endhosts);
 
@@ -51,14 +52,14 @@ impl ScionHeaders {
         let common_header = CommonHeader {
             version: Version::default(),
             traffic_class: 0,
-            flow_id: Self::simple_flow_id(endhosts),
+            flow_id,
             next_header,
             header_length_factor,
             payload_length: payload_length
                 .try_into()
                 .map_err(|_| EncodeError::PayloadTooLarge)?,
             path_type: path.dataplane_path.path_type(),
-            address_info: endhosts.map(SocketAddr::address_info),
+            address_info: endhosts.map(ScionAddr::address_info),
             reserved: 0,
         };
 
@@ -69,11 +70,24 @@ impl ScionHeaders {
         })
     }
 
-    // TODO(mlegner): More sophisticated flow ID?
-    /// Simple flow ID containing the XOR of source and destination port with a prepended 1
-    /// to prevent a value of 0.
-    fn simple_flow_id(endhosts: &ByEndpoint<SocketAddr>) -> FlowId {
-        (0x1_0000 | (endhosts.source.port() ^ endhosts.destination.port()) as u32).into()
+    /// Creates a new [`ScionHeaders`] object given the source and destination [`SocketAddr`],
+    /// the [`Path`], the next-header value, and the payload length.
+    ///
+    /// This is equivalent to [`ScionHeaders::new`] but uses [`FlowId::new_from_ports`] to set the
+    /// `flow_id`.
+    pub fn new_with_ports(
+        endhosts: &ByEndpoint<SocketAddr>,
+        path: &Path,
+        next_header: u8,
+        payload_length: usize,
+    ) -> Result<Self, EncodeError> {
+        Self::new(
+            &endhosts.map(SocketAddr::scion_address),
+            path,
+            next_header,
+            payload_length,
+            FlowId::new_from_ports(&endhosts.map(SocketAddr::port)),
+        )
     }
 }
 
@@ -160,7 +174,7 @@ mod tests {
             source: SocketAddr::from_str("[1-1,10.0.0.1]:10001").unwrap(),
             destination: SocketAddr::from_str("[1-2,10.0.0.2]:10002").unwrap(),
         };
-        let headers = ScionHeaders::new(
+        let headers = ScionHeaders::new_with_ports(
             &endpoints,
             &Path::empty(endpoints.map(SocketAddr::isd_asn)),
             0,

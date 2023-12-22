@@ -3,7 +3,14 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use crate::{
-    packet::{AddressHeader, ByEndpoint, ChecksumDigest, InadequateBufferSize, MessageChecksum},
+    packet::{
+        self,
+        AddressHeader,
+        ByEndpoint,
+        ChecksumDigest,
+        InadequateBufferSize,
+        MessageChecksum,
+    },
     wire_encoding::{WireDecode, WireEncodeVec},
 };
 
@@ -14,6 +21,9 @@ pub enum UdpDecodeError {
     DatagramEmptyOrTruncated,
     #[error("next-header value of SCION header is not correct")]
     WrongProtocolNumber(u8),
+    /// An error when decoding the SCION packet.
+    #[error(transparent)]
+    PackedDecodeError(#[from] packet::DecodeError),
 }
 
 #[allow(missing_docs)]
@@ -29,7 +39,7 @@ pub enum UdpEncodeError {
 /// the [RFC].
 ///
 /// [RFC]: https://www.ietf.org/archive/id/draft-dekater-scion-dataplane-00.html
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct UdpMessage {
     /// The source and destination ports
     pub port: ByEndpoint<u16>,

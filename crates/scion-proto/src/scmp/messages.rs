@@ -7,7 +7,7 @@ use crate::{
     address::IsdAsn,
     packet::{AddressHeader, ChecksumDigest, InadequateBufferSize, MessageChecksum},
     utils::encoded_type,
-    wire_encoding::WireEncodeVec,
+    wire_encoding::{WireDecode, WireEncodeVec},
 };
 
 /// Fully decoded SCMP message with an appropriate format.
@@ -64,25 +64,31 @@ pub enum ScmpMessage {
     UnknownError(ScmpMessageRaw),
 }
 
+macro_rules! call_method_on_scmp_variants {
+    ($self:ident.$name:ident($($param:ident),*)) => {
+        match $self {
+            Self::DestinationUnreachable(x) => x.$name($($param),*),
+            Self::PacketTooBig(x) => x.$name($($param),*),
+            Self::ParameterProblem(x) => x.$name($($param),*),
+            Self::ExternalInterfaceDown(x) => x.$name($($param),*),
+            Self::InternalConnectivityDown(x) => x.$name($($param),*),
+            Self::EchoRequest(x) => x.$name($($param),*),
+            Self::EchoReply(x) => x.$name($($param),*),
+            Self::TracerouteRequest(x) => x.$name($($param),*),
+            Self::TracerouteReply(x) => x.$name($($param),*),
+            Self::UnknownError(x) => x.$name($($param),*),
+        }
+    };
+}
+
 macro_rules! lift_fn_from_scmp_variants {
     (
         $(#[$outer:meta])*
-        $vis:vis fn $name:ident(&self $(,$param:ident : $param_type:ty)*) -> $return_type:ty
+        $vis:vis fn $name:ident(self$(: $self_ty:ty)? $(,$param:ident : $param_type:ty)*) -> $return_type:ty
     ) => {
         $(#[$outer])*
-        $vis fn $name(&self $(,$param : $param_type)*) -> $return_type {
-            match self {
-                Self::DestinationUnreachable(x) => x.$name($($param),*),
-                Self::PacketTooBig(x) => x.$name($($param),*),
-                Self::ParameterProblem(x) => x.$name($($param),*),
-                Self::ExternalInterfaceDown(x) => x.$name($($param),*),
-                Self::InternalConnectivityDown(x) => x.$name($($param),*),
-                Self::EchoRequest(x) => x.$name($($param),*),
-                Self::EchoReply(x) => x.$name($($param),*),
-                Self::TracerouteRequest(x) => x.$name($($param),*),
-                Self::TracerouteReply(x) => x.$name($($param),*),
-                Self::UnknownError(x) => x.$name($($param),*),
-            }
+        $vis fn $name(self$(: $self_ty)? $(,$param : $param_type)*) -> $return_type {
+            call_method_on_scmp_variants!(self.$name($($param),*))
         }
     };
 }
@@ -90,17 +96,22 @@ macro_rules! lift_fn_from_scmp_variants {
 impl ScmpMessage {
     lift_fn_from_scmp_variants!(
         /// Returns the type of the corresponding message.
-        pub fn get_type(&self) -> ScmpType
+        pub fn get_type(self: &Self) -> ScmpType
     );
 
     lift_fn_from_scmp_variants!(
         /// Returns the code field of the corresponding message.
-        pub fn code(&self) -> u8
+        pub fn code(self: &Self) -> u8
     );
 
     lift_fn_from_scmp_variants!(
         /// Returns true if the checksum successfully verifies, otherwise false.
-        pub fn verify_checksum(&self, address_header: &AddressHeader) -> bool
+        pub fn verify_checksum(self: &Self, address_header: &AddressHeader) -> bool
+    );
+
+    lift_fn_from_scmp_variants!(
+        /// Returns true if the checksum successfully verifies, otherwise false.
+        pub fn set_checksum(self: &mut Self, address_header: &AddressHeader) -> ()
     );
 
     /// Returns true iff `self` is an error message.
@@ -151,16 +162,24 @@ impl TryFrom<ScmpMessageRaw> for ScmpMessage {
     }
 }
 
+impl WireDecode<Bytes> for ScmpMessage {
+    type Error = ScmpDecodeError;
+
+    fn decode(data: &mut Bytes) -> Result<Self, Self::Error> {
+        ScmpMessageRaw::decode(data)?.try_into()
+    }
+}
+
 impl WireEncodeVec<2> for ScmpMessage {
     type Error = InadequateBufferSize;
 
     lift_fn_from_scmp_variants!(
-        fn encode_with_unchecked(&self, buffer: &mut bytes::BytesMut) -> [Bytes; 2]
+        fn encode_with_unchecked(self: &Self, buffer: &mut bytes::BytesMut) -> [Bytes; 2]
     );
 
-    lift_fn_from_scmp_variants!(fn total_length(&self) -> usize);
+    lift_fn_from_scmp_variants!(fn total_length(self: &Self) -> usize);
 
-    lift_fn_from_scmp_variants!(fn required_capacity(&self) -> usize);
+    lift_fn_from_scmp_variants!(fn required_capacity(self: &Self) -> usize);
 }
 
 trait ScmpMessageEncodeDecode: ScmpMessageBase + MessageChecksum + Sized {
@@ -239,6 +258,18 @@ macro_rules! impl_conversion_and_type {
                     return Err(ScmpDecodeError::MessageEmptyOrTruncated);
                 }
                 Ok(Self::from_raw_unchecked(value))
+            }
+        }
+
+        impl TryFrom<ScmpMessage> for $name {
+            type Error = ScmpDecodeError;
+
+            fn try_from(value: ScmpMessage) -> Result<Self, Self::Error> {
+                if let ScmpMessage::$message_type(m) = value {
+                    Ok(m)
+                } else {
+                    Err(ScmpDecodeError::MessageTypeMismatch)
+                }
             }
         }
 

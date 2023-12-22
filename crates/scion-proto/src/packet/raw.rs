@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// A SCION network packet.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScionPacketRaw {
     /// Packet headers
     pub headers: ScionHeaders,
@@ -34,7 +34,7 @@ impl ScionPacketRaw {
         payload: Bytes,
         next_header: u8,
     ) -> Result<Self, EncodeError> {
-        let headers = ScionHeaders::new(endhosts, path, next_header, payload.len())?;
+        let headers = ScionHeaders::new_with_ports(endhosts, path, next_header, payload.len())?;
 
         Ok(Self { headers, payload })
     }
