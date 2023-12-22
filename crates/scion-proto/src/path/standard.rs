@@ -1,7 +1,7 @@
 //! A standard SCION path.
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
-use bytes::{Buf, BufMut, Bytes};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 
 use super::DataplanePathErrorKind;
@@ -35,6 +35,9 @@ pub struct StandardPath<T = Bytes> {
     /// The raw data containing the meta_header, info, and hop fields.
     encoded_path: T,
 }
+
+/// The standard SCION path header with a mutable encoded path.
+pub type StandardPathMut = StandardPath<BytesMut>;
 
 impl<T> StandardPath<T> {
     /// Returns the metadata about the stored path.
@@ -173,7 +176,7 @@ where
     }
 
     /// Returns an iterator over all of the [`HopField`]s in the SCION path.
-    fn hop_fields(&self) -> HopFields {
+    pub fn hop_fields(&self) -> HopFields {
         self.hop_fields_subset(0, self.meta_header.hop_fields_count())
     }
 
@@ -192,6 +195,46 @@ where
     fn write_reversed_hop_fields_to(&self, buffer: &mut &mut [u8]) {
         for hop_field in self.hop_fields().rev() {
             buffer.put_slice(hop_field.as_ref())
+        }
+    }
+}
+
+impl<T> StandardPath<T>
+where
+    T: DerefMut<Target = [u8]>,
+{
+    /// Returns the [`HopField`] at the specified index as a mutable reference, if within range.
+    pub fn hop_field_mut(&mut self, index: usize) -> Option<&mut HopField> {
+        if index < self.meta_header.hop_fields_count() {
+            let start = self.meta_header.hop_field_offset(index);
+            let slice = &mut self.encoded_path[start..(start + HopField::LENGTH)];
+            Some(HopField::new_mut(slice))
+        } else {
+            None
+        }
+    }
+}
+
+impl StandardPath {
+    /// Converts a standard path over an immutable reference to one over an mutable reference.
+    ///
+    /// This requires copying the encoded path.
+    pub fn to_mut(&self) -> StandardPathMut {
+        let mut encoded_path = BytesMut::zeroed(self.encoded_path.len());
+        encoded_path.copy_from_slice(self.encoded_path.as_ref());
+        StandardPath {
+            meta_header: self.meta_header.clone(),
+            encoded_path,
+        }
+    }
+}
+
+impl StandardPathMut {
+    /// Converts a standard path over a mutable reference to one over an immutable reference.
+    pub fn freeze(self) -> StandardPath {
+        StandardPath {
+            meta_header: self.meta_header,
+            encoded_path: self.encoded_path.freeze(),
         }
     }
 }

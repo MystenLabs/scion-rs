@@ -1,6 +1,6 @@
 //! SCION packets containing UDP datagrams.
 
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 
 use super::{InadequateBufferSize, MessageChecksum, ScionHeaders, ScionPacketRaw};
 use crate::{
@@ -12,6 +12,7 @@ use crate::{
 };
 
 /// A SCION packet containing a UDP datagram.
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScionPacketUdp {
     /// Packet headers
     pub headers: ScionHeaders,
@@ -59,7 +60,7 @@ impl ScionPacketUdp {
         path: &Path,
         payload: Bytes,
     ) -> Result<Self, EncodeError> {
-        let headers = ScionHeaders::new(
+        let headers = ScionHeaders::new_with_ports(
             endhosts,
             path,
             UdpMessage::PROTOCOL_NUMBER,
@@ -86,6 +87,14 @@ impl TryFrom<ScionPacketRaw> for ScionPacketUdp {
             headers: value.headers,
             datagram: UdpMessage::decode(&mut value.payload)?,
         })
+    }
+}
+
+impl<T: Buf> WireDecode<T> for ScionPacketUdp {
+    type Error = UdpDecodeError;
+
+    fn decode(data: &mut T) -> Result<Self, Self::Error> {
+        ScionPacketRaw::decode(data)?.try_into()
     }
 }
 

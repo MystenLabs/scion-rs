@@ -100,6 +100,33 @@ impl PathMetaHeader {
         self.current_hop_field.get().into()
     }
 
+    /// The number of interfaces on the path.
+    ///
+    /// This starts counting at 0 with the egress interface of the first AS and only counts actually
+    /// traversed interfaces. In particular, crossover ASes are only counted as 2 interfaces even
+    /// though they are represented by two hop fields.
+    pub fn interfaces_count(&self) -> usize {
+        2 * (self.hop_fields_count() - self.info_fields_count())
+    }
+
+    /// Returns the index of the hop field including the given interface.
+    ///
+    /// This does *not* check that the `interface_index` is in range and provides meaningless
+    /// results if the [`Self::segment_lengths`] are invalid but does not panic in those cases.
+    pub fn hop_field_index_for_interface(&self, interface_index: usize) -> usize {
+        let actual_hop_index = (interface_index + 1) / 2;
+        match interface_index / 2 + 1 {
+            // The interface is in the first segment
+            x if x < self.segment_lengths[0].length() => actual_hop_index,
+            // The interface is in the second segment; add 1 for the additional crossover hop field
+            x if x + 1 < self.segment_lengths[0].length() + self.segment_lengths[1].length() => {
+                actual_hop_index + 1
+            }
+            // The interface is in the third segment; add 2 for the additional crossover hop fields
+            _ => actual_hop_index + 2,
+        }
+    }
+
     /// Returns the offset in bytes of the given info field.
     pub fn info_field_offset(info_field_index: usize) -> usize {
         Self::LENGTH + Self::INFO_FIELD_LENGTH * info_field_index
@@ -231,4 +258,89 @@ const fn nth_field<const N: usize>(fields: u32) -> u8 {
     const MASK: u32 = 0b11_1111;
 
     ((fields >> ((5 - N) * FIELD_BITS)) & MASK) as u8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! new_path_meta_header {
+        [$seg1:expr, $seg2:expr, $seg3:expr] => {
+            PathMetaHeader {
+                current_info_field: InfoFieldIndex(0),
+                current_hop_field: HopFieldIndex(0),
+                reserved: PathMetaReserved(0),
+                segment_lengths: [
+                    SegmentLength($seg1),
+                    SegmentLength($seg2),
+                    SegmentLength($seg3),
+                ],
+            }
+        };
+    }
+
+    mod interfaces_count {
+        use super::*;
+
+        macro_rules! test_interfaces_count {
+            ($name:ident, [$seg1:expr, $seg2:expr, $seg3:expr], $count:expr) => {
+                #[test]
+                fn $name() {
+                    assert_eq!(
+                        new_path_meta_header![$seg1, $seg2, $seg3].interfaces_count(),
+                        $count
+                    )
+                }
+            };
+        }
+
+        test_interfaces_count!(no_segment, [0, 0, 0], 0);
+        test_interfaces_count!(single_segment1, [2, 0, 0], 2);
+        test_interfaces_count!(single_segment2, [4, 0, 0], 6);
+        test_interfaces_count!(two_segments, [4, 3, 0], 10);
+        test_interfaces_count!(three_segments, [4, 3, 2], 12);
+    }
+
+    mod hop_index_for_interface {
+        use super::*;
+
+        macro_rules! test_hop_index_for_interface {
+            ($name:ident, [$seg1:expr, $seg2:expr, $seg3:expr], $interface_index:expr, $hop_index:expr) => {
+                #[test]
+                fn $name() {
+                    assert_eq!(
+                        new_path_meta_header![$seg1, $seg2, $seg3]
+                            .hop_field_index_for_interface($interface_index),
+                        $hop_index
+                    )
+                }
+            };
+        }
+        test_hop_index_for_interface!(single_segment1, [4, 0, 0], 0, 0);
+        test_hop_index_for_interface!(single_segment2, [4, 0, 0], 1, 1);
+        test_hop_index_for_interface!(single_segment3, [4, 0, 0], 4, 2);
+        test_hop_index_for_interface!(single_segment4, [4, 0, 0], 5, 3);
+        test_hop_index_for_interface!(two_segments1, [4, 3, 0], 5, 3);
+        test_hop_index_for_interface!(two_segments2, [4, 3, 0], 6, 4);
+        test_hop_index_for_interface!(two_segments3, [4, 3, 0], 9, 6);
+        test_hop_index_for_interface!(three_segments1, [4, 3, 2], 9, 6);
+        test_hop_index_for_interface!(three_segments2, [4, 3, 2], 10, 7);
+        test_hop_index_for_interface!(three_segments3, [4, 3, 2], 11, 8);
+
+        macro_rules! test_no_panic {
+            ($name:ident, [$seg1:expr, $seg2:expr, $seg3:expr]) => {
+                #[test]
+                fn $name() {
+                    let header = new_path_meta_header![$seg1, $seg2, $seg3];
+                    header.hop_field_index_for_interface(0);
+                    header.hop_field_index_for_interface(4);
+                }
+            };
+        }
+
+        test_no_panic!(no_segment, [0, 0, 0]);
+        test_no_panic!(invalid_segments1, [0, 0, 4]);
+        test_no_panic!(invalid_segments2, [2, 0, 4]);
+        test_no_panic!(invalid_segments3, [0, 3, 0]);
+    }
 }

@@ -1,5 +1,7 @@
 //! Errors encountered when handling SCMP messages.
 
+use crate::packet;
+
 /// Error encountered when attempting to decode an SCMP message.
 #[derive(Debug, thiserror::Error)]
 pub enum ScmpDecodeError {
@@ -20,4 +22,7 @@ pub enum ScmpDecodeError {
     /// of the SCION header doesn't match [`SCMP_PROTOCOL_NUMBER`][super::SCMP_PROTOCOL_NUMBER].
     #[error("next-header value of SCION header is not correct")]
     WrongProtocolNumber(u8),
+    /// An error when decoding the SCION packet.
+    #[error(transparent)]
+    PackedDecodeError(#[from] packet::DecodeError),
 }

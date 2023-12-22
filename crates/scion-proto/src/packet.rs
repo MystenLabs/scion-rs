@@ -23,6 +23,9 @@ pub use headers::{
 pub mod raw;
 pub use raw::ScionPacketRaw;
 
+pub mod scmp;
+pub use scmp::ScionPacketScmp;
+
 pub mod udp;
 pub use udp::ScionPacketUdp;
 

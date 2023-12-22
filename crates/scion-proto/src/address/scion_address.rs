@@ -3,6 +3,7 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use super::{error::AddressKind, AddressParseError, HostAddr, IsdAsn, ServiceAddr};
+use crate::packet::AddressInfo;
 
 /// A SCION network address.
 ///
@@ -29,7 +30,7 @@ impl ScionAddr {
         }
     }
 
-    /// Returns the host associated with this socket address.
+    /// Returns the host associated with this SCION address.
     pub const fn host(&self) -> HostAddr {
         match self {
             ScionAddr::V4(addr) => HostAddr::V4(*addr.host()),
@@ -58,6 +59,15 @@ impl ScionAddr {
             ScionAddr::V4(addr) => addr.set_isd_asn(new_isd_asn),
             ScionAddr::V6(addr) => addr.set_isd_asn(new_isd_asn),
             ScionAddr::Svc(addr) => addr.set_isd_asn(new_isd_asn),
+        }
+    }
+
+    /// Returns the address info corresponding to the SCION address's address type.
+    pub const fn address_info(&self) -> AddressInfo {
+        match self {
+            ScionAddr::V4(_) => AddressInfo::IPV4,
+            ScionAddr::V6(_) => AddressInfo::IPV6,
+            ScionAddr::Svc(_) => AddressInfo::SERVICE,
         }
     }
 }
@@ -138,7 +148,7 @@ macro_rules! scion_address {
                 Self { isd_asn, host }
             }
 
-            /// Returns the host associated with this socket address.
+            /// Returns the host associated with this SCION address.
             pub const fn host(&self) -> &$host_type {
                 &self.host
             }

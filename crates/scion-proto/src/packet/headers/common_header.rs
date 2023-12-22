@@ -122,6 +122,23 @@ wire_encoding::bounded_uint! {
     pub struct FlowId(u32 : 20);
 }
 
+// TODO(mlegner): Figure out better way of setting the flow ID for various cases.
+
+impl Default for FlowId {
+    /// Set the flow ID to a dummy value of 1 (0 is disallowed by the specification).
+    fn default() -> Self {
+        FlowId::new_unchecked(1)
+    }
+}
+
+impl FlowId {
+    /// Simple flow ID containing the XOR of source and destination port with a prepended 1
+    /// to prevent a (disallowed) value of 0.
+    pub fn new_from_ports(ports: &ByEndpoint<u16>) -> Self {
+        (0x1_0000 | (ports.source ^ ports.destination) as u32).into()
+    }
+}
+
 wire_encoding::bounded_uint!(
     /// An AddressInfo instance describes the type and length of a host address in
     /// the SCION common header.

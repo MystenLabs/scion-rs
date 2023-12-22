@@ -57,6 +57,15 @@ impl SocketAddr {
         }
     }
 
+    /// Returns the SCION address associated with this socket address.
+    pub fn scion_address(&self) -> ScionAddr {
+        match self {
+            SocketAddr::V4(addr) => ScionAddr::V4(*addr.scion_addr()),
+            SocketAddr::V6(addr) => ScionAddr::V6(*addr.scion_addr()),
+            SocketAddr::Svc(addr) => ScionAddr::Svc(*addr.scion_addr()),
+        }
+    }
+
     /// Returns the host address associated with this socket address.
     pub fn host(&self) -> HostAddr {
         match self {
