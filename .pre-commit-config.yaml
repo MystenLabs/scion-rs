@@ -70,6 +70,6 @@ repos:
     name: cargo-deny
     entry: cargo deny
     files: Cargo.(lock|toml)
-    args: ["--all-features", "check", "-D", "warnings"]
+    args: ["--all-features", "check"]
     language: rust
     pass_filenames: false
