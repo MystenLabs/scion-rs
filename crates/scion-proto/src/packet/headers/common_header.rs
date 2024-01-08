@@ -107,7 +107,7 @@ impl CommonHeader {
 
     /// The payload length as a usize.
     pub fn payload_size(&self) -> usize {
-        usize::try_from(self.payload_length).expect("usize to be larger than 16-bits")
+        usize::from(self.payload_length)
     }
 }
 
