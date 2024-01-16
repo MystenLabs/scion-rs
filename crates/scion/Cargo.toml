@@ -9,6 +9,7 @@ publish = false
 async-trait = "0.1.74"
 bytes = "1.5.0"
 chrono = { workspace = true, features = ["clock"] }
+futures = "0.3.30"
 scion-grpc = { version = "0.1.0", path = "../scion-grpc" }
 scion-proto = { version = "0.1.0", path = "../scion-proto" }
 thiserror = { workspace = true }
@@ -17,6 +18,8 @@ tonic = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+mockall = "0.12.1"
+tokio = { version = "1.34.0", features = ["rt-multi-thread", "macros", "test-util"] }
 tracing-subscriber = "0.3.17"
 
 [lints]

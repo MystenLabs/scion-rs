@@ -7,3 +7,5 @@ pub use path_service::AsyncPathService;
 
 mod error;
 pub use error::{PathErrorKind, ReceiveError, SendError};
+
+pub mod path_strategy;
