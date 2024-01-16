@@ -1,6 +1,9 @@
 use std::{fmt::Display, io};
 
-use scion_proto::packet::{self, EncodeError};
+use scion_proto::{
+    packet::{self, EncodeError},
+    scmp::ScmpMessage,
+};
 
 use crate::dispatcher;
 
@@ -82,4 +85,9 @@ pub enum ReceiveError {
     /// The provided path buffer does not meet the minimum length requirement.
     #[error("path buffer too short")]
     PathBufferTooShort,
+    /// An SCMP error message was received.
+    ///
+    /// The contained [`ScmpMessage`] is guaranteed to be an error message.
+    #[error("an SCMP error message was received: {0}")]
+    ScmpError(ScmpMessage),
 }
