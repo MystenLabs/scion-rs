@@ -6,6 +6,7 @@
 use std::{net::SocketAddr, ops::Deref};
 
 use bytes::Bytes;
+use chrono::{DateTime, Utc};
 use scion_grpc::daemon::v1 as daemon_grpc;
 use tracing::warn;
 
@@ -85,6 +86,20 @@ impl<T> Path<T> {
     /// See [`PathFingerprint`] for more details.
     pub fn fingerprint(&self) -> Result<PathFingerprint, FingerprintError> {
         PathFingerprint::try_from(self)
+    }
+
+    /// Returns the length of the path in terms of the number of interfaces, if available.
+    pub fn len(&self) -> Option<usize> {
+        if self.is_empty() {
+            Some(0)
+        } else {
+            self.metadata.as_ref().map(|m| m.interfaces.len())
+        }
+    }
+
+    /// Returns the expiry time of the path if the path contains metadata, otherwise None.
+    pub fn expiry_time(&self) -> Option<DateTime<Utc>> {
+        self.metadata.as_ref().map(|metadata| metadata.expiration)
     }
 }
 

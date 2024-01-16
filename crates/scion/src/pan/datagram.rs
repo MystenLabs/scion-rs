@@ -132,7 +132,7 @@ where
         destination: <Self as AsyncScionDatagram>::Addr,
     ) -> Result<(), SendError> {
         let path = self.path_to(*destination.as_ref()).await?;
-        self.send_to_via(payload, destination, path).await
+        self.send_to_via(payload, destination, &path).await
     }
 
     /// Send a datagram using [`AsyncScionDatagram::send_via`] with a path from the path service.
@@ -140,13 +140,13 @@ where
         if let Some(remote_addr) = self.remote_addr() {
             // Use send_via here as it maintains the connected semantics of the function call.
             let path = self.path_to(*remote_addr.as_ref()).await?;
-            self.send_via(payload, path).await
+            self.send_via(payload, &path).await
         } else {
             Err(SendError::Io(io::ErrorKind::NotConnected.into()))
         }
     }
 
-    async fn path_to(&self, remote_ia: IsdAsn) -> Result<&Path, SendError> {
+    async fn path_to(&self, remote_ia: IsdAsn) -> Result<Path, SendError> {
         self.path_service
             .path_to(remote_ia)
             .await
