@@ -16,7 +16,7 @@ use crate::{
 /// field [`Self::payload`].
 ///
 /// [scion-doc-scmp]: https://docs.scion.org/en/latest/protocols/scmp.html
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScmpMessageRaw {
     /// The type of the SCMP message.
     ///

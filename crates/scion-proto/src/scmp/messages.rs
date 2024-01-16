@@ -1,5 +1,7 @@
 //! Specific individual SCMP messages and their types.
 
+use std::fmt::{Display, Pointer};
+
 use bytes::{Buf, BufMut, Bytes};
 
 use super::{ScmpDecodeError, ScmpMessageBase, ScmpMessageRaw, SCMP_PROTOCOL_NUMBER};
@@ -17,7 +19,7 @@ use crate::{
 /// There is an [`UnknownError`][Self::UnknownError] variant, but no `UnknownInformational`, because
 /// the specification states:
 /// "If an SCMP informational message of unknown type is received, it MUST be silently dropped."
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 pub enum ScmpMessage {
     /// An SCMP DestinationUnreachable message.
     ///
@@ -128,6 +130,10 @@ impl ScmpMessage {
     pub fn is_supported(&self) -> bool {
         !matches!(self, Self::UnknownError(_))
     }
+}
+
+impl Display for ScmpMessage {
+    lift_fn_from_scmp_variants!(fn fmt(self: &Self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result);
 }
 
 impl TryFrom<ScmpMessageRaw> for ScmpMessage {
@@ -318,6 +324,12 @@ macro_rules! impl_conversion_and_type {
                 .checksum()
             }
         }
+
+        impl Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(stringify!($name))
+            }
+        }
     };
 }
 
@@ -330,7 +342,7 @@ macro_rules! error_message {
         $(;code = self.$code_field:ident)?
     ) => {
         $(#[$outer])*
-        #[derive(Debug, Clone, PartialEq)]
+        #[derive(Debug, Clone, PartialEq, Eq)]
         pub struct $name {
             $($(#[$doc])* $vis $field: $type,)*
             /// The (truncated) packet that triggered the error.
@@ -648,7 +660,7 @@ macro_rules! informational_message {
         $message_type:ident => pub struct $name:ident {$($(#[$doc:meta])* $vis:vis $field:ident : $type:ty,)*}
     ) => {
         $(#[$outer])*
-        #[derive(Debug, Clone, PartialEq)]
+        #[derive(Debug, Clone, PartialEq, Eq)]
         pub struct $name {
             /// A 16-bit identifier to aid matching replies with requests.
             pub identifier: u16,

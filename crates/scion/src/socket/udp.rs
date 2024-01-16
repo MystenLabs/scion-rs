@@ -14,6 +14,7 @@ use scion_proto::{
     packet::{ByEndpoint, MessageChecksum, ScionPacketRaw, ScionPacketUdp},
     path::{DataplanePath, Path},
     reliable::Packet,
+    scmp::{ScmpMessage, SCMP_PROTOCOL_NUMBER},
     wire_encoding::WireDecode,
 };
 use tokio::sync::Mutex;
@@ -149,6 +150,23 @@ macro_rules! log_err {
             err
         }
     };
+    ($message:expr, $error:expr) => {
+        |err| {
+            tracing::debug!(?err, $message);
+            $error
+        }
+    };
+}
+
+/// Error messages used in private functions in [`UdpSocketInner`].
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+enum InternalReceiveError {
+    /// An error occurred while parsing an incoming packet or some check failed.
+    #[error("an invalid packet was received")]
+    InvalidPacket,
+    /// An SCMP error message was received.
+    #[error("an SCMP error message was received: {0}")]
+    ScmpError(ScmpMessage),
 }
 
 #[derive(Debug)]
@@ -237,10 +255,8 @@ impl UdpSocketInner {
             let receive_result = stream.receive_packet().await;
 
             match receive_result {
-                Ok(packet) => {
-                    if let Some((packet_len, sender, path)) =
-                        self.parse_incoming_from(packet, buf, remote_addr)
-                    {
+                Ok(packet) => match self.parse_incoming_from(packet, buf, remote_addr) {
+                    Ok((packet_len, sender, path)) => {
                         if let Some(path_buf) = path_buf {
                             let path_len = path.dataplane_path.raw().len();
                             let dataplane_path = path
@@ -256,51 +272,71 @@ impl UdpSocketInner {
                         } else {
                             return Ok((packet_len, sender, None));
                         }
-                    } else {
-                        continue;
                     }
-                }
+                    Err(InternalReceiveError::ScmpError(s)) => {
+                        return Err(ReceiveError::ScmpError(s))
+                    }
+                    _ => continue,
+                },
                 Err(_) => todo!("attempt reconnections to dispatcher"),
             }
         }
     }
 
-    /// Parse a datagram from the provided packet.
+    /// Parse a datagram from the provided packet and copy the payload to `buf`.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if path_buf, when not empty, does not have sufficient length for the SCION path.
+    /// - If an SCMP error message is received instead of a UDP datagram, returns an
+    ///   [`InternalReceiveError::ScmpError`].
+    /// - If the packet cannot be parsed as either a UDP datagram or an SCMP error message,
+    ///   returns a [`InternalReceiveError::InvalidPacket`].
     fn parse_incoming_from(
         &self,
         mut packet: Packet,
         buf: &mut [u8],
         remote_addr: Option<SocketAddr>,
-    ) -> Option<(usize, SocketAddr, Path)> {
+    ) -> Result<(usize, SocketAddr, Path), InternalReceiveError> {
         // TODO(jsmith): Need a representation of the packets for logging purposes
-        let mut scion_packet = ScionPacketRaw::decode(&mut packet.content)
-            .map_err(log_err!("failed to decode SCION packet"))
-            .ok()?;
+        let mut scion_packet = ScionPacketRaw::decode(&mut packet.content).map_err(log_err!(
+            "failed to decode SCION packet",
+            InternalReceiveError::InvalidPacket
+        ))?;
 
-        let udp_datagram = UdpMessage::decode(&mut scion_packet.payload)
-            .map_err(log_err!("failed to decode UDP datagram"))
-            .ok()?;
+        if scion_packet.headers.common.next_header == SCMP_PROTOCOL_NUMBER {
+            let scmp_message = ScmpMessage::decode(&mut scion_packet.payload).map_err(log_err!(
+                "received SCMP message but failed to decode",
+                InternalReceiveError::InvalidPacket
+            ))?;
+            return Err(if scmp_message.is_error() {
+                InternalReceiveError::ScmpError(scmp_message)
+            } else {
+                tracing::debug!("received unexpected SCMP informational message");
+                InternalReceiveError::InvalidPacket
+            });
+        }
+
+        let udp_datagram = UdpMessage::decode(&mut scion_packet.payload).map_err(log_err!(
+            "failed to decode UDP datagram",
+            InternalReceiveError::InvalidPacket
+        ))?;
 
         if !udp_datagram.verify_checksum(&scion_packet.headers.address) {
             tracing::debug!("failed to verify packet checksum");
-            return None;
+            return Err(InternalReceiveError::InvalidPacket);
         }
 
         let source = if let Some(source_scion_addr) = scion_packet.headers.address.source() {
             SocketAddr::new(source_scion_addr, udp_datagram.port.source)
         } else {
             tracing::debug!("dropping packet with unsupported source address type");
-            return None;
+            return Err(InternalReceiveError::InvalidPacket);
         };
 
         if let Some(remote_addr) = remote_addr {
             if remote_addr != source {
                 tracing::debug!(%source, %remote_addr, "dropping packet not from connected remote");
-                return None;
+                return Err(InternalReceiveError::InvalidPacket);
             }
         }
 
@@ -308,7 +344,7 @@ impl UdpSocketInner {
         let copy_length = cmp::min(payload_len, buf.len());
         buf[..copy_length].copy_from_slice(&udp_datagram.payload[..copy_length]);
 
-        Some((
+        Ok((
             payload_len,
             source,
             Path::new(
