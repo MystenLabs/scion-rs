@@ -46,8 +46,8 @@ pub struct Path<T = Bytes> {
     pub metadata: Option<PathMetadata>,
 }
 
-#[allow(missing_docs)]
 impl<T> Path<T> {
+    /// Creates a new `Path` without metadata.
     pub fn new(
         dataplane_path: DataplanePath<T>,
         isd_asn: ByEndpoint<IsdAsn>,
@@ -92,6 +92,7 @@ impl<T> Path<T> {
         self.isd_asn.destination
     }
 
+    /// Creates a new empty path between the provided ISD-ASNs.
     pub fn empty(isd_asn: ByEndpoint<IsdAsn>) -> Self {
         Self {
             dataplane_path: DataplanePath::EmptyPath,
@@ -101,6 +102,7 @@ impl<T> Path<T> {
         }
     }
 
+    /// Returns true iff the dataplane path is an empty path.
     pub fn is_empty(&self) -> bool {
         self.dataplane_path.is_empty()
     }
@@ -138,6 +140,31 @@ impl<T> Path<T> {
         self.metadata
             .as_ref()
             .map(|metadata| metadata.interfaces.len())
+    }
+}
+
+impl<T> Path<T>
+where
+    T: Deref<Target = [u8]>,
+{
+    /// Returns a new `Path` with the old path's `dataplane_path` reversed and written to the
+    /// provided buffer.
+    ///
+    /// Also reverses the order of `isd_asn`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `buf` has insufficient length. This can be prevented by ensuring a buffer size
+    /// of at least [`DataplanePath::MAX_LEN`].
+    pub fn reverse_to_slice(self, buf: &mut [u8]) -> Path<&mut [u8]> {
+        let path_len = self.dataplane_path.raw().len();
+        let dataplane_path = self.dataplane_path.reverse_to_slice(&mut buf[..path_len]);
+
+        Path::new(
+            dataplane_path,
+            self.isd_asn.into_reversed(),
+            self.underlay_next_hop,
+        )
     }
 }
 

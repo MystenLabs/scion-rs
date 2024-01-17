@@ -19,7 +19,7 @@ use scion_proto::{
 };
 use tokio::sync::Mutex;
 
-use super::BindError;
+use super::{error::log_err, utils::check_buffers, BindError};
 use crate::{
     dispatcher::{self, get_dispatcher_path, DispatcherStream},
     pan::{AsyncScionDatagram, PathErrorKind, ReceiveError, SendError},
@@ -47,6 +47,10 @@ pub struct UdpSocket {
 
 impl UdpSocket {
     /// Creates a new UDP socket bound to the provided SCION socket address.
+    ///
+    /// When specifying a port `0` in the `address`, the port is assigned automatically by the
+    /// dispatcher. In this case, the assigned port can be obtained by calling
+    /// [`local_port()`][Self::local_port] on the returned object.
     pub async fn bind(address: SocketAddr) -> Result<Self, BindError> {
         Self::bind_with_dispatcher(address, get_dispatcher_path()).await
     }
@@ -55,7 +59,7 @@ impl UdpSocket {
     /// and registering with the SCION dispatcher at the specified path.
     ///
     /// See [`bind`][Self::bind] for a variant that connects to the system's configured
-    /// SCION dispatcher .
+    /// SCION dispatcher.
     pub async fn bind_with_dispatcher<P>(
         address: SocketAddr,
         dispatcher_path: P,
@@ -78,6 +82,11 @@ impl UdpSocket {
     /// Returns the local SCION address to which this socket is bound.
     pub fn local_addr(&self) -> SocketAddr {
         self.inner.local_addr()
+    }
+
+    /// Returns the port number to which this socket is bound.
+    pub fn local_port(&self) -> u16 {
+        self.local_addr().port()
     }
 
     /// Registers a remote address for this socket.
@@ -141,21 +150,6 @@ impl AsyncScionDatagram for UdpSocket {
     fn remote_addr(&self) -> Option<Self::Addr> {
         self.inner.remote_addr()
     }
-}
-
-macro_rules! log_err {
-    ($message:expr) => {
-        |err| {
-            tracing::debug!(?err, $message);
-            err
-        }
-    };
-    ($message:expr, $error:expr) => {
-        |err| {
-            tracing::debug!(?err, $message);
-            $error
-        }
-    };
 }
 
 /// Error messages used in private functions in [`UdpSocketInner`].
@@ -236,14 +230,7 @@ impl UdpSocketInner {
         buf: &mut [u8],
         path_buf: Option<&'p mut [u8]>,
     ) -> Result<(usize, SocketAddr, Option<Path<&'p mut [u8]>>), ReceiveError> {
-        if buf.is_empty() {
-            return Err(ReceiveError::ZeroLengthBuffer);
-        }
-        if let Some(path_buf) = path_buf.as_ref() {
-            if path_buf.len() < DataplanePath::<Bytes>::MAX_LEN {
-                return Err(ReceiveError::PathBufferTooShort);
-            }
-        }
+        check_buffers(buf, &path_buf)?;
 
         // Keep a copy of the connection's remote_addr locally, so that the user connecting to a
         // different destination does not affect what this call should return.
@@ -254,32 +241,18 @@ impl UdpSocketInner {
             let mut stream = self.stream.lock().await;
             let receive_result = stream.receive_packet().await;
 
-            match receive_result {
+            return match receive_result {
                 Ok(packet) => match self.parse_incoming_from(packet, buf, remote_addr) {
-                    Ok((packet_len, sender, path)) => {
-                        if let Some(path_buf) = path_buf {
-                            let path_len = path.dataplane_path.raw().len();
-                            let dataplane_path = path
-                                .dataplane_path
-                                .reverse_to_slice(&mut path_buf[..path_len]);
-
-                            let path = Path::new(
-                                dataplane_path,
-                                path.isd_asn.into_reversed(),
-                                path.underlay_next_hop,
-                            );
-                            return Ok((packet_len, sender, Some(path)));
-                        } else {
-                            return Ok((packet_len, sender, None));
-                        }
-                    }
-                    Err(InternalReceiveError::ScmpError(s)) => {
-                        return Err(ReceiveError::ScmpError(s))
-                    }
+                    Ok((packet_len, sender, path)) => Ok((
+                        packet_len,
+                        sender,
+                        path_buf.map(|b| path.reverse_to_slice(b)),
+                    )),
+                    Err(InternalReceiveError::ScmpError(s)) => Err(ReceiveError::ScmpError(s)),
                     _ => continue,
                 },
                 Err(_) => todo!("attempt reconnections to dispatcher"),
-            }
+            };
         }
     }
 
@@ -453,10 +426,10 @@ mod tests {
     }
 
     macro_rules! async_test_case {
-        ($name:ident: $func:ident($arg1:expr$(, $arg:expr)*)) => {
+        ($name:ident: $func:ident($($arg:expr),*)) => {
             #[tokio::test]
             async fn $name() -> TestResult {
-                $func($arg1 $(, $arg)*).await
+                $func($($arg,)*).await
             }
         };
     }

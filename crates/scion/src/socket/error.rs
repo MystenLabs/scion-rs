@@ -22,3 +22,20 @@ impl From<UdpEncodeError> for SendError {
         }
     }
 }
+
+macro_rules! log_err {
+    ($message:expr) => {
+        |err| {
+            tracing::debug!(?err, $message);
+            err
+        }
+    };
+    ($message:expr, $error:expr) => {
+        |err| {
+            tracing::debug!(?err, $message);
+            $error
+        }
+    };
+}
+
+pub(crate) use log_err;
