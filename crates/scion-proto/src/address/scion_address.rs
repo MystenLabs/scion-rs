@@ -1,6 +1,6 @@
 //! SCION endhost addresses.
 
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use super::{error::AddressKind, AddressParseError, HostAddr, IsdAsn, ServiceAddr};
 use crate::packet::AddressInfo;
@@ -36,6 +36,16 @@ impl ScionAddr {
             ScionAddr::V4(addr) => HostAddr::V4(*addr.host()),
             ScionAddr::V6(addr) => HostAddr::V6(*addr.host()),
             ScionAddr::Svc(addr) => HostAddr::Svc(*addr.host()),
+        }
+    }
+
+    /// Returns a [`std::net::IpAddr`] corresponding to the AS-local portion of the address,
+    /// if it is not a service address.
+    pub const fn local_address(&self) -> Option<IpAddr> {
+        match self {
+            ScionAddr::V4(addr) => Some(IpAddr::V4(*addr.host())),
+            ScionAddr::V6(addr) => Some(IpAddr::V6(*addr.host())),
+            ScionAddr::Svc(_) => None,
         }
     }
 

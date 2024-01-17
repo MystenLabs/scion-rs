@@ -3,5 +3,10 @@
 mod error;
 pub use error::BindError;
 
+mod raw;
+pub use raw::RawSocket;
+
 mod udp;
 pub use udp::UdpSocket;
+
+mod utils;
