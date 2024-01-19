@@ -6,8 +6,12 @@ use scion_proto::{address::IsdAsn, path::Path};
 mod async_strategy;
 pub use async_strategy::AsyncPathStrategy;
 
+pub mod refresher;
+
+mod utc_instant;
+
 /// Errors returned when fetching paths from a [`PathStrategy`].
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PathFetchError {
     /// The requested destination is not supported by this strategy,
     /// and will never return a valid result.
@@ -16,6 +20,7 @@ pub enum PathFetchError {
 }
 
 /// Requests that a path strategy can make on its controller.
+#[derive(Debug, PartialEq, Eq)]
 pub enum Request {
     /// Requests that the controller queries paths to the specified destination.
     LookupPathsTo(IsdAsn),

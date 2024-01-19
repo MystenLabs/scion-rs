@@ -3,7 +3,7 @@ mod datagram;
 pub use datagram::{AsyncScionDatagram, PathAwareDatagram};
 
 mod path_service;
-pub use path_service::AsyncPathService;
+pub use path_service::{AsyncPathService, PathLookupError};
 
 mod error;
 pub use error::{PathErrorKind, ReceiveError, SendError};

@@ -1,6 +1,6 @@
 //! A client to communicate with the SCION daemon.
 
-use std::env;
+use std::{env, vec};
 
 use scion_grpc::daemon::{v1 as daemon_grpc, v1::daemon_service_client::DaemonServiceClient};
 use scion_proto::{address::IsdAsn, packet::ByEndpoint, path::Path};
@@ -11,6 +11,13 @@ use super::{
     messages::{self, PathRequest},
     AsInfo,
 };
+use crate::pan::{AsyncPathService, PathLookupError};
+
+/// The default address of the SCION daemon.
+pub const DEFAULT_DAEMON_ADDRESS: &str = "https://localhost:30255";
+
+/// The environment variable to configure the address of the SCION daemon.
+pub const DAEMON_ADDRESS_ENV_VARIABLE: &str = "SCION_DAEMON_ADDRESS";
 
 #[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
@@ -22,12 +29,6 @@ pub enum DaemonClientError {
     #[error("Response contained invalid data")]
     InvalidData,
 }
-
-/// The default address of the SCION daemon.
-pub const DEFAULT_DAEMON_ADDRESS: &str = "https://localhost:30255";
-
-/// The environment variable to configure the address of the SCION daemon.
-pub const DAEMON_ADDRESS_ENV_VARIABLE: &str = "SCION_DAEMON_ADDRESS";
 
 /// Get the daemon address.
 ///
@@ -124,7 +125,7 @@ impl DaemonClient {
 #[derive(Debug)]
 pub struct Paths {
     isd_asn: ByEndpoint<IsdAsn>,
-    grpc_paths: std::vec::IntoIter<daemon_grpc::Path>,
+    grpc_paths: vec::IntoIter<daemon_grpc::Path>,
 }
 
 impl Iterator for Paths {
@@ -138,5 +139,30 @@ impl Iterator for Paths {
             }
         }
         None
+    }
+}
+
+impl AsyncPathService for DaemonClient {
+    type PathsTo = Paths;
+
+    async fn paths_to(&self, scion_as: IsdAsn) -> Result<Self::PathsTo, PathLookupError> {
+        self.check_destination(scion_as)?;
+
+        Ok(self.paths(&PathRequest::new(scion_as)).await?)
+    }
+
+    async fn path_to(&self, scion_as: IsdAsn) -> Result<Path, PathLookupError> {
+        self.check_destination(scion_as)?;
+
+        self.paths(&PathRequest::new(scion_as))
+            .await?
+            .next()
+            .ok_or(PathLookupError::NoPath)
+    }
+}
+
+impl From<DaemonClientError> for PathLookupError {
+    fn from(value: DaemonClientError) -> Self {
+        PathLookupError::Other(Box::new(value))
     }
 }
