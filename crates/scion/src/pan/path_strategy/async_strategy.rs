@@ -2,12 +2,11 @@ use std::{
     collections::HashSet,
     future::Future,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use scion_proto::{address::IsdAsn, path::Path};
-use tokio::{task::JoinHandle, time, time::Instant};
+use tokio::{sync::watch, task::JoinHandle, time, time::Instant};
 
 use super::PathStrategy;
 use crate::pan::{
@@ -52,8 +51,6 @@ where
     S: PathStrategy + Send + 'static,
     P: AsyncPathService + Send + Sync + 'static,
 {
-    const PATH_WAIT_TIME: Duration = Duration::from_millis(10);
-
     /// Creates a new `AsyncPathStrategy` and spawns a background task to drive the strategy.
     ///
     /// The provided [`PathStrategy`] determines the logic and the provided [`AsyncPathService`]
@@ -78,7 +75,7 @@ where
         F: FnOnce(&S, Instant) -> Result<T, PathLookupError>,
     {
         let start = Instant::now();
-        tracing::debug!("waiting until paths become available");
+        let mut update_listener = self.inner.subscribe_to_path_changes();
 
         loop {
             {
@@ -89,23 +86,21 @@ where
                 match strategy.is_path_available(scion_as, now.into()) {
                     Err(PathFetchError::UnsupportedDestination) => {
                         tracing::debug!("request was for unsupported destination");
-                        return Err(PathLookupError::NoPath);
+                        return Err(PathLookupError::UnsupportedDestination);
                     }
                     Ok(true) => {
                         tracing::debug!(now=?rel_now, "paths are available, running handler");
                         return handler(&*strategy, now);
                     }
-                    Ok(false) => tracing::debug!(
-                        now = tracing::field::debug(rel_now),
-                        "no paths currently available"
-                    ),
+                    Ok(false) => tracing::debug!(now = ?rel_now, "no paths currently available"),
                 }
             }
 
-            // Try again after a brief pause.
-            let rel_now = Instant::now().duration_since(start);
-            tracing::debug!(now=?rel_now, "waiting {:?} until next check", Self::PATH_WAIT_TIME);
-            tokio::time::sleep(Self::PATH_WAIT_TIME).await;
+            tracing::debug!("waiting until the path strategy has received paths");
+            if update_listener.changed().await.is_err() {
+                tracing::warn!("channel dropped while waiting, aborting wait");
+                return Err(PathLookupError::NoPath);
+            }
         }
     }
 }
@@ -158,6 +153,7 @@ impl<S, P> Drop for AsyncPathStrategy<S, P> {
 struct AsyncPathStrategyInner<S, P> {
     path_service: P,
     strategy: Mutex<S>,
+    update_notifier: watch::Sender<()>,
 }
 
 impl<'p, S, P> AsyncPathStrategyInner<S, P>
@@ -169,6 +165,7 @@ where
         Self {
             strategy: Mutex::new(strategy),
             path_service,
+            update_notifier: watch::Sender::new(()),
         }
     }
 
@@ -212,9 +209,8 @@ where
                 callback_time=?callback_time.duration_since(start), "waiting for paths or callback timeout"
             );
 
-            // Wait for the callback duration, or until a pending path query completes.
-            // If there are no pending path queries, then this will just sleep until the
-            // callback time.
+            // Wait for the callback duration, or until a pending path query completes. If there
+            // are no pending path queries, then this will just sleep until the callback time.
             while let Ok(next) = time::timeout_at(callback_time, requests.next_ready()).await {
                 let span = tracing::debug_span!("event_wait", now=?start.elapsed());
 
@@ -234,6 +230,9 @@ where
 
                         tracing::debug!(%scion_as, count=found_paths.len(), "path lookup successful");
                         strategy.handle_lookup_paths(&found_paths, Instant::now().into());
+
+                        self.update_notifier.send_replace(());
+
                         break;
                     }
                     None => {
@@ -244,6 +243,10 @@ where
                 }
             }
         }
+    }
+
+    fn subscribe_to_path_changes(&self) -> watch::Receiver<()> {
+        self.update_notifier.subscribe()
     }
 }
 

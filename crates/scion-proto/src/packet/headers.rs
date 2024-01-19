@@ -107,7 +107,7 @@ impl WireEncode for ScionHeaders {
 }
 
 /// Instances of an object associated with both a source and destination endpoint.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, PartialOrd, Ord)]
 pub struct ByEndpoint<T> {
     /// The value for the source
     pub source: T,

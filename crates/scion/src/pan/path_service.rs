@@ -16,6 +16,9 @@ pub enum PathLookupError {
     /// The destination can be queried, but there are no paths available to it.
     #[error("no path available to destination")]
     NoPath,
+    /// Other errors raised by the service.
+    #[error(transparent)]
+    Other(Box<dyn std::error::Error + Send>),
 }
 
 /// Trait for asynchronously retrieving paths to SCION ASes.

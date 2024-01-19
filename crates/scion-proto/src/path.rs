@@ -30,6 +30,9 @@ pub use fingerprint::{FingerprintError, PathFingerprint};
 mod metadata;
 pub use metadata::{GeoCoordinates, LinkType, PathInterface, PathMetadata};
 
+/// Minimum MTU along any path or within any AS.
+pub const PATH_MIN_MTU: u16 = 1280;
+
 /// A SCION end-to-end path with optional metadata.
 #[derive(Debug, Clone)]
 pub struct Path<T = Bytes> {
@@ -65,7 +68,28 @@ impl<T> Path<T> {
     /// Panics if the AS is a wildcard AS.
     pub fn local(isd_asn: IsdAsn) -> Self {
         assert!(!isd_asn.is_wildcard(), "no local path for wildcard AS");
-        Self::empty(ByEndpoint::with_cloned(isd_asn))
+
+        Self {
+            dataplane_path: DataplanePath::EmptyPath,
+            underlay_next_hop: None,
+            isd_asn: ByEndpoint::with_cloned(isd_asn),
+            metadata: Some(PathMetadata {
+                expiration: DateTime::<Utc>::MAX_UTC,
+                mtu: PATH_MIN_MTU,
+                interfaces: vec![],
+                ..PathMetadata::default()
+            }),
+        }
+    }
+
+    /// Returns the source of this path.
+    pub const fn source(&self) -> IsdAsn {
+        self.isd_asn.source
+    }
+
+    /// Returns the destination of this path.
+    pub const fn destination(&self) -> IsdAsn {
+        self.isd_asn.destination
     }
 
     pub fn empty(isd_asn: ByEndpoint<IsdAsn>) -> Self {
@@ -101,6 +125,20 @@ impl<T> Path<T> {
     pub fn expiry_time(&self) -> Option<DateTime<Utc>> {
         self.metadata.as_ref().map(|metadata| metadata.expiration)
     }
+
+    /// Returns true if the path contains an expiry time, and it is after now,
+    /// false if the contained expiry time is at or before now, and None if the path
+    /// does not contain an expiry time.
+    pub fn is_expired(&self, now: DateTime<Utc>) -> Option<bool> {
+        self.expiry_time().map(|t| t <= now)
+    }
+
+    /// Returns the number of interfaces traversed by the path, if available. Otherwise None.
+    pub fn interface_count(&self) -> Option<usize> {
+        self.metadata
+            .as_ref()
+            .map(|metadata| metadata.interfaces.len())
+    }
 }
 
 #[allow(missing_docs)]
@@ -112,8 +150,10 @@ impl Path<Bytes> {
     ) -> Result<Self, PathParseError> {
         let mut dataplane_path = Bytes::from(std::mem::take(&mut value.raw));
         if dataplane_path.is_empty() {
-            return if isd_asn.are_equal() {
+            return if isd_asn.are_equal() && isd_asn.destination.is_wildcard() {
                 Ok(Path::empty(isd_asn))
+            } else if isd_asn.are_equal() {
+                Ok(Path::local(isd_asn.destination))
             } else {
                 Err(PathParseErrorKind::EmptyRaw.into())
             };
