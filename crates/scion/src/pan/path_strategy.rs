@@ -6,9 +6,13 @@ use scion_proto::{address::IsdAsn, path::Path};
 mod async_strategy;
 pub use async_strategy::AsyncPathStrategy;
 
-pub mod refresher;
-
 mod utc_instant;
+
+#[cfg(test)]
+mod test_utils;
+
+pub mod refresher;
+pub mod uniform;
 
 /// Errors returned when fetching paths from a [`PathStrategy`].
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -17,6 +21,11 @@ pub enum PathFetchError {
     /// and will never return a valid result.
     #[error("the requested destination is not supported by this strategy")]
     UnsupportedDestination,
+    /// This error is raised when a call to a path fetch changes the internal state
+    /// of the strategy, in a way that would require the strategy to be polled despite
+    /// any previous pending callbacks.
+    #[error("the strategy wants to be polled irrespective of its previous callback")]
+    RequiresPoll,
 }
 
 /// Requests that a path strategy can make on its controller.

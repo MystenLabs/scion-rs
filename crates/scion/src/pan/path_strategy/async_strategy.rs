@@ -6,7 +6,11 @@ use std::{
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use scion_proto::{address::IsdAsn, path::Path};
-use tokio::{sync::watch, task::JoinHandle, time, time::Instant};
+use tokio::{
+    sync::{watch, Notify},
+    task::JoinHandle,
+    time::Instant,
+};
 
 use super::PathStrategy;
 use crate::pan::{
@@ -85,8 +89,12 @@ where
 
                 match strategy.is_path_available(scion_as, now.into()) {
                     Err(PathFetchError::UnsupportedDestination) => {
-                        tracing::debug!("request was for unsupported destination");
+                        tracing::debug!(now=?rel_now, "request was for unsupported destination");
                         return Err(PathLookupError::UnsupportedDestination);
+                    }
+                    Err(PathFetchError::RequiresPoll) => {
+                        tracing::debug!(now=?rel_now, "strategy requires polling, waking worker");
+                        self.inner.wake();
                     }
                     Ok(true) => {
                         tracing::debug!(now=?rel_now, "paths are available, running handler");
@@ -154,6 +162,7 @@ struct AsyncPathStrategyInner<S, P> {
     path_service: P,
     strategy: Mutex<S>,
     update_notifier: watch::Sender<()>,
+    waker: Notify,
 }
 
 impl<'p, S, P> AsyncPathStrategyInner<S, P>
@@ -166,6 +175,7 @@ where
             strategy: Mutex::new(strategy),
             path_service,
             update_notifier: watch::Sender::new(()),
+            waker: Notify::new(),
         }
     }
 
@@ -211,34 +221,41 @@ where
 
             // Wait for the callback duration, or until a pending path query completes. If there
             // are no pending path queries, then this will just sleep until the callback time.
-            while let Ok(next) = time::timeout_at(callback_time, requests.next_ready()).await {
-                let span = tracing::debug_span!("event_wait", now=?start.elapsed());
-
-                match next {
-                    Some((scion_as, Err(err))) => {
-                        span.in_scope(
-                            || tracing::warn!(%scion_as, %err, "ignoring path lookup failure"),
-                        );
-                        continue;
-                    }
-                    Some((scion_as, Ok(paths))) => {
-                        let _guard = span.enter();
-                        let mut strategy = self.strategy.lock().unwrap();
-
-                        found_paths.clear();
-                        found_paths.extend(paths);
-
-                        tracing::debug!(%scion_as, count=found_paths.len(), "path lookup successful");
-                        strategy.handle_lookup_paths(&found_paths, Instant::now().into());
-
-                        self.update_notifier.send_replace(());
-
+            loop {
+                tokio::select! {
+                    _ = self.waker.notified() => {
+                        tracing::debug!(now=?start.elapsed(), "woken prematurely by call to wake()");
                         break;
                     }
-                    None => {
-                        span.in_scope(|| tracing::debug!("no pending path lookups remaining"));
-                        time::sleep_until(callback_time).await;
+                    _ = tokio::time::sleep_until(callback_time) => {
+                        tracing::debug!(now=?start.elapsed(), "callback duration elapsed");
                         break;
+                    }
+                    Some(next) = requests.next_ready() => {
+                        let span = tracing::debug_span!("event_wait", now=?start.elapsed());
+
+                        match next {
+                            (scion_as, Err(err)) => {
+                                span.in_scope(
+                                    || tracing::warn!(%scion_as, %err, "ignoring path lookup failure"),
+                                );
+                                continue;
+                            }
+                            (scion_as, Ok(paths)) => {
+                                let _guard = span.enter();
+                                let mut strategy = self.strategy.lock().unwrap();
+
+                                found_paths.clear();
+                                found_paths.extend(paths);
+
+                                tracing::debug!(%scion_as, count=found_paths.len(), "path lookup successful");
+                                strategy.handle_lookup_paths(&found_paths, Instant::now().into());
+
+                                self.update_notifier.send_replace(());
+
+                                break;
+                            }
+                        }
                     }
                 }
             }
@@ -247,6 +264,10 @@ where
 
     fn subscribe_to_path_changes(&self) -> watch::Receiver<()> {
         self.update_notifier.subscribe()
+    }
+
+    fn wake(&self) {
+        self.waker.notify_one();
     }
 }
 
@@ -577,13 +598,26 @@ mod tests {
 
     use mocks::*;
 
-    async fn run_path_strategy<S, P>(strategy: S, path_service: P, run_duration: Duration)
-    where
+    async fn create_and_run_path_strategy<S, P>(
+        strategy: S,
+        path_service: P,
+        run_duration: Duration,
+    ) where
         S: PathStrategy + Send + 'static,
         P: AsyncPathService + Send + Sync + 'static,
     {
-        let mut async_strategy = AsyncPathStrategy::new(strategy, path_service);
+        let async_strategy = AsyncPathStrategy::new(strategy, path_service);
 
+        run_path_strategy(async_strategy, run_duration).await
+    }
+
+    async fn run_path_strategy<S, P>(
+        mut async_strategy: AsyncPathStrategy<S, P>,
+        run_duration: Duration,
+    ) where
+        S: PathStrategy + Send + 'static,
+        P: AsyncPathService + Send + Sync + 'static,
+    {
         // Get the background task so that we can join on it
         let mut background_task = tokio::spawn(async {});
         std::mem::swap(&mut background_task, &mut async_strategy.background_task);
@@ -624,7 +658,7 @@ mod tests {
             .returning(never_completes)
             .times(1..);
 
-        run_path_strategy(strategy, path_service, millisecs(10)).await;
+        create_and_run_path_strategy(strategy, path_service, millisecs(10)).await;
     }
 
     #[tokio::test(start_paused = true)]
@@ -638,7 +672,7 @@ mod tests {
 
         path_service.expect_paths_to().never();
 
-        run_path_strategy(strategy, path_service, millisecs(10)).await;
+        create_and_run_path_strategy(strategy, path_service, millisecs(10)).await;
     }
 
     async fn polls_until_callback(n_lookups: usize) {
@@ -650,7 +684,7 @@ mod tests {
             .returning(identical_lookups_then_callback(n_lookups, millisecs(100)))
             .times(n_lookups + 1);
 
-        run_path_strategy(strategy, path_service, millisecs(10)).await;
+        create_and_run_path_strategy(strategy, path_service, millisecs(10)).await;
     }
 
     async_param_test! {
@@ -676,7 +710,7 @@ mod tests {
             .returning(never_completes)
             .times(1);
 
-        run_path_strategy(strategy, path_service, millisecs(10)).await;
+        create_and_run_path_strategy(strategy, path_service, millisecs(10)).await;
     }
 
     #[tokio::test(start_paused = true)]
@@ -694,7 +728,7 @@ mod tests {
             .returning(never_completes)
             .times(2);
 
-        run_path_strategy(strategy, path_service, millisecs(10)).await;
+        create_and_run_path_strategy(strategy, path_service, millisecs(10)).await;
     }
 
     #[tokio::test(start_paused = true)]
@@ -716,7 +750,7 @@ mod tests {
             .return_const(())
             .times(expected_successful_lookups as usize);
 
-        run_path_strategy(strategy, path_service, millisecs(run_duration_ms)).await;
+        create_and_run_path_strategy(strategy, path_service, millisecs(run_duration_ms)).await;
     }
 
     #[tokio::test(start_paused = true)]
@@ -738,7 +772,7 @@ mod tests {
             .withf(any_path_to(IsdAsn(REMOTE_IA.as_u64() + 1)))
             .times(1);
 
-        run_path_strategy(strategy, path_service, millisecs(10)).await;
+        create_and_run_path_strategy(strategy, path_service, millisecs(10)).await;
     }
 
     #[tokio::test(start_paused = true)]
@@ -755,7 +789,7 @@ mod tests {
 
         strategy.expect_handle_lookup_paths().return_const(());
 
-        run_path_strategy(strategy, path_service, millisecs(10)).await;
+        create_and_run_path_strategy(strategy, path_service, millisecs(10)).await;
     }
 
     #[tokio::test(start_paused = true)]
@@ -778,7 +812,7 @@ mod tests {
             })
             .times(1);
 
-        run_path_strategy(strategy, path_service, millisecs(35)).await;
+        create_and_run_path_strategy(strategy, path_service, millisecs(35)).await;
     }
 
     #[tokio::test]
@@ -850,5 +884,28 @@ mod tests {
         assert_eq!(path.isd_asn.destination, REMOTE_IA);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn polls_when_requested_by_path_lookup() {
+        let mut strategy = MockStrategy::new();
+        let path_service = MockPathService::that_never_completes();
+
+        strategy
+            .expect_is_path_available()
+            .returning(|_, _| Err(PathFetchError::RequiresPoll));
+
+        strategy
+            .expect_poll_requests()
+            // .returning(repeated_callbacks_with_duration(Duration::from_secs(3600)))
+            .returning(repeated_callbacks_with_duration(millisecs(1000)))
+            .times(2);
+
+        let async_strategy = AsyncPathStrategy::new(strategy, path_service);
+
+        let _ = tokio::time::timeout(millisecs(1), async_strategy.path_to(REMOTE_IA)).await;
+
+        tokio::time::pause();
+        run_path_strategy(async_strategy, millisecs(10)).await;
     }
 }
