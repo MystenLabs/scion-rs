@@ -8,11 +8,12 @@ use super::{
     CommonHeader,
     DecodeError,
     EncodeError,
+    FlowId,
     InadequateBufferSize,
     ScionHeaders,
 };
 use crate::{
-    address::SocketAddr,
+    address::ScionAddr,
     path::{DataplanePath, Path},
     wire_encoding::{WireDecode, WireDecodeWithContext, WireEncode, WireEncodeVec},
 };
@@ -29,12 +30,13 @@ pub struct ScionPacketRaw {
 impl ScionPacketRaw {
     /// Creates a new SCION raw packet
     pub fn new(
-        endhosts: &ByEndpoint<SocketAddr>,
+        endhosts: &ByEndpoint<ScionAddr>,
         path: &Path,
         payload: Bytes,
         next_header: u8,
+        flow_id: FlowId,
     ) -> Result<Self, EncodeError> {
-        let headers = ScionHeaders::new_with_ports(endhosts, path, next_header, payload.len())?;
+        let headers = ScionHeaders::new(endhosts, path, next_header, payload.len(), flow_id)?;
 
         Ok(Self { headers, payload })
     }
