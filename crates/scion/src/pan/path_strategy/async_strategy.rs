@@ -769,7 +769,7 @@ mod tests {
         strategy
             .expect_handle_lookup_paths()
             .return_const(())
-            .withf(any_path_to(IsdAsn(REMOTE_IA.as_u64() + 1)))
+            .withf(any_path_to(IsdAsn(REMOTE_IA.to_u64() + 1)))
             .times(1);
 
         create_and_run_path_strategy(strategy, path_service, millisecs(10)).await;

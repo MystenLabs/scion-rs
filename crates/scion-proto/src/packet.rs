@@ -4,12 +4,12 @@
 //! format, and errors encountered while decoding the packet.
 //!
 //! For paths useable in a SCION packet, see the [path module][`crate::path`].
-
-pub mod error;
 use bytes::Bytes;
-pub use error::{DecodeError, EncodeError, InadequateBufferSize};
 
-pub mod headers;
+mod error;
+pub use error::{DecodeError, EncodeError, InadequateBufferSize, ScmpEncodeError};
+
+mod headers;
 pub use headers::{
     AddressHeader,
     AddressInfo,
@@ -21,13 +21,13 @@ pub use headers::{
     Version,
 };
 
-pub mod raw;
+mod raw;
 pub use raw::ScionPacketRaw;
 
-pub mod scmp;
+mod scmp;
 pub use scmp::ScionPacketScmp;
 
-pub mod udp;
+mod udp;
 pub use udp::ScionPacketUdp;
 
 mod checksum;

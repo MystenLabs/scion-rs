@@ -8,6 +8,17 @@ use serde::Deserialize;
 use super::{error::AddressKind, AddressParseError, Asn, Isd};
 
 /// The combined ISD and AS identifier of a SCION AS (sometimes abbreviated as IA).
+///
+/// # Examples
+///
+/// ```
+/// # use scion_proto::address::IsdAsn;
+/// #
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// assert_eq!(IsdAsn(0x1_ff00_0000_0110), "1-ff00:0:110".parse()?);
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Copy, Clone, Eq, PartialEq, Deserialize, Hash, PartialOrd, Ord)]
 #[serde(try_from = "String")]
 #[repr(transparent)]
@@ -15,20 +26,62 @@ pub struct IsdAsn(pub u64);
 
 impl IsdAsn {
     /// A SCION IA of the special wildcard IA, 0-0.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use scion_proto::address::{Isd, Asn, IsdAsn};
+    /// #
+    /// assert_eq!(IsdAsn::WILDCARD, IsdAsn(0));
+    /// assert_eq!(IsdAsn::WILDCARD, IsdAsn::new(Isd::WILDCARD, Asn::WILDCARD));
+    /// ```
     pub const WILDCARD: Self = Self(0);
 
+    /// Maximum valid ISD-AS number.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use scion_proto::address::{Isd, Asn, IsdAsn};
+    /// #
+    /// assert_eq!(IsdAsn::MAX, IsdAsn(u64::MAX));
+    /// assert_eq!(IsdAsn::MAX, IsdAsn::new(Isd::MAX, Asn::MAX));
+    /// ```
+    pub const MAX: Self = Self(u64::MAX);
+
+    /// The number of bits in a SCION ISD-AS number.
+    pub const BITS: u32 = u64::BITS;
+
     /// Construct a new identifier from ISD and AS identifiers.
-    pub fn new(isd: Isd, asn: Asn) -> Self {
-        Self(u64::from(isd.as_u16()) << Asn::BITS | asn.as_u64())
+    pub const fn new(isd: Isd, asn: Asn) -> Self {
+        Self((isd.to_u16() as u64) << Asn::BITS | asn.to_u64())
     }
 
     /// Return the ISD associated with this identifier.
-    pub fn isd(&self) -> Isd {
-        Isd::new(u16::try_from(self.0 >> Asn::BITS).expect("only the 16 high-order bits"))
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use scion_proto::address::{IsdAsn, Isd, Asn};
+    /// #
+    /// let ia = IsdAsn::new(Isd(1), Asn::new(0xff00_0000_0110));
+    /// assert_eq!(ia.isd(), Isd(1));
+    /// ```
+    pub const fn isd(&self) -> Isd {
+        Isd::new((self.0 >> Asn::BITS) as u16)
     }
 
     /// Return the AS number associated with this identifier.
-    pub fn asn(&self) -> Asn {
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use scion_proto::address::{Asn, IsdAsn, Isd};
+    /// #
+    /// let ia = IsdAsn::new(Isd(1), Asn::new(0xff00_0000_0110));
+    /// assert_eq!(ia.asn(), Asn::new(0xff00_0000_0110));
+    /// ```
+    pub const fn asn(&self) -> Asn {
         Asn::new(self.0 & 0xffff_ffff_ffff)
     }
 
@@ -37,20 +90,19 @@ impl IsdAsn {
     /// # Examples
     ///
     /// ```
-    /// # use scion_proto::address::{Asn,IsdAsn,Isd};
-    /// assert!(IsdAsn::new(Isd::WILDCARD,Asn::new(1)).is_wildcard());
-    /// assert!(IsdAsn::new(Isd::new(1),Asn::WILDCARD).is_wildcard());
-    /// assert!(!IsdAsn::new(Isd::new(1),Asn::new(1)).is_wildcard());
+    /// # use scion_proto::address::{Asn, IsdAsn, Isd};
+    /// assert!(IsdAsn::new(Isd::WILDCARD, Asn::new(1)).is_wildcard());
+    /// assert!(IsdAsn::new(Isd::new(1), Asn::WILDCARD).is_wildcard());
+    /// assert!(!IsdAsn::new(Isd::new(1), Asn::new(1)).is_wildcard());
     /// ```
-    pub fn is_wildcard(&self) -> bool {
+    pub const fn is_wildcard(&self) -> bool {
         self.isd().is_wildcard() || self.asn().is_wildcard()
     }
 
     /// Return the IA as a 64-bit integer.
     ///
-    /// The highest 16 bits constitute the ISD number, and the lower 48 bits form the
-    /// AS number.
-    pub fn as_u64(&self) -> u64 {
+    /// The highest 16 bits constitute the ISD number, and the lower 48 bits form the AS number.
+    pub const fn to_u64(&self) -> u64 {
         self.0
     }
 }
@@ -98,7 +150,7 @@ impl TryFrom<String> for IsdAsn {
 
 impl From<IsdAsn> for u64 {
     fn from(value: IsdAsn) -> Self {
-        value.as_u64()
+        value.to_u64()
     }
 }
 
@@ -162,7 +214,7 @@ mod tests {
         #[test]
         fn as_u64() {
             assert_eq!(
-                IsdAsn::new(Isd::new(0x0123), Asn::new(0x4567_89ab_cdef)).as_u64(),
+                IsdAsn::new(Isd::new(0x0123), Asn::new(0x4567_89ab_cdef)).to_u64(),
                 0x0123_4567_89ab_cdef
             )
         }

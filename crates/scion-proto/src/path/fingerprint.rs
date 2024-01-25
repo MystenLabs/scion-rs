@@ -57,7 +57,7 @@ impl PathFingerprint {
     /// ```
     pub fn local(local_ia: IsdAsn) -> Self {
         Self(
-            Sha256::new_with_prefix(local_ia.as_u64().to_be_bytes())
+            Sha256::new_with_prefix(local_ia.to_u64().to_be_bytes())
                 .finalize()
                 .into(),
         )
@@ -79,7 +79,7 @@ impl PathFingerprint {
             let Some(interface) = interface else {
                 return Err(FingerprintError);
             };
-            hasher.update(interface.isd_asn.as_u64().to_be_bytes());
+            hasher.update(interface.isd_asn.to_u64().to_be_bytes());
             hasher.update(u64::from(interface.id).to_be_bytes());
         }
 

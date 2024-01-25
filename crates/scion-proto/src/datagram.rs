@@ -14,11 +14,13 @@ use crate::{
     wire_encoding::{WireDecode, WireEncodeVec},
 };
 
-#[allow(missing_docs)]
+/// Error returned when attempting to decode a [`UdpMessage`].
 #[derive(Debug, thiserror::Error)]
 pub enum UdpDecodeError {
+    /// The datagram was empty or shorter than expected.
     #[error("datagram is empty or was truncated")]
     DatagramEmptyOrTruncated,
+    /// The protocol number in the SCION header does not indicate a UDP message.
     #[error("next-header value of SCION header is not correct")]
     WrongProtocolNumber(u8),
     /// An error when decoding the SCION packet.
@@ -26,9 +28,10 @@ pub enum UdpDecodeError {
     PackedDecodeError(#[from] packet::DecodeError),
 }
 
-#[allow(missing_docs)]
+/// Error returned when creating a new datagram.
 #[derive(Debug, thiserror::Error)]
 pub enum UdpEncodeError {
+    /// The provided payload is too large to fit in a UDP datagram.
     #[error("payload length cannot be encoded")]
     PayloadTooLarge,
 }

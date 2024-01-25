@@ -86,7 +86,7 @@ impl RegistrationRequest {
         self.encode_command_flag(buffer);
 
         buffer.put_u8(UdpMessage::PROTOCOL_NUMBER);
-        buffer.put_u64(self.isd_asn.as_u64());
+        buffer.put_u64(self.isd_asn.to_u64());
 
         encode_address(buffer, &self.public_address);
 
@@ -168,13 +168,19 @@ fn encode_address(buffer: &mut impl BufMut, address: &SocketAddr) {
 pub struct InvalidRegistrationAddressError;
 
 /// Errors indicating a failure in the registration protocol.
-#[allow(missing_docs)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 pub enum RegistrationError {
+    /// The registration response was not of the expected length.
     #[error("invalid response length")]
     InvalidResponseLength,
+    /// The dispatcher assigned a port that did not match with the request.
     #[error("dispatcher assigned incorrect port")]
-    PortMismatch { requested: u16, assigned: u16 },
+    PortMismatch {
+        /// The port requested
+        requested: u16,
+        /// The port assigned
+        assigned: u16,
+    },
 }
 
 /// A simple state machine for handling the registration to the dispatcher.

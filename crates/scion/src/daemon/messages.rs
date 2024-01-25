@@ -5,7 +5,7 @@ use scion_proto::address::IsdAsn;
 
 pub fn sas_request_from(value: IsdAsn) -> daemon_grpc::AsRequest {
     daemon_grpc::AsRequest {
-        isd_as: value.as_u64(),
+        isd_as: value.to_u64(),
     }
 }
 
@@ -54,8 +54,8 @@ pub struct PathRequestFlags {
 impl From<&PathRequest> for daemon_grpc::PathsRequest {
     fn from(value: &PathRequest) -> Self {
         Self {
-            source_isd_as: value.source.as_u64(),
-            destination_isd_as: value.destination.as_u64(),
+            source_isd_as: value.source.to_u64(),
+            destination_isd_as: value.destination.to_u64(),
             refresh: value.flags.refresh,
             hidden: value.flags.hidden,
         }

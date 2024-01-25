@@ -17,8 +17,7 @@ use crate::packet::AddressInfo;
 /// A SCION socket address.
 ///
 /// SCION socket addresses consist of an ISD-AS number, a 16-bit port identifier, and either an
-/// [IPv4 address][`Ipv4Addr`], an [IPv6 address][`Ipv6Addr`], or a
-/// [SCION service address][`ServiceAddr`].
+/// [IPv4 address][`Ipv4Addr`], an [IPv6 address][`Ipv6Addr`], or a [SCION service address][`ServiceAddr`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum SocketAddr {
     /// An IPv4 socket address.

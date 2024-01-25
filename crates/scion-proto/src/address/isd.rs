@@ -5,28 +5,46 @@ use std::{
 
 use super::{error::AddressKind, AddressParseError};
 
-/// Identifier of a SCION Isolation Domain.
+/// A 16-bit identifier of a SCION Isolation Domain.
 ///
-/// See formatting and allocations [here][isd-and-as-numbering].
+/// See [this table][anapaya-assignments] for current ISD network assignments.
 ///
-/// [isd-and-as-numbering]: https://github.com/scionproto/scion/wiki/ISD-and-AS-numbering#isd-numbers
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+/// [anapaya-assignments]: https://docs.anapaya.net/en/latest/resources/isd-as-assignments/
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
-pub struct Isd(u16);
+pub struct Isd(pub u16);
 
 impl Isd {
     /// The SCION ISD number representing the wildcard ISD.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use scion_proto::address::Isd;
+    /// assert_eq!(Isd::WILDCARD, Isd::new(0));
+    /// ```
     pub const WILDCARD: Self = Self(0);
-    /// The number of bits in a SCION ISD number
+
+    /// Maximum valid ISD identifier.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use scion_proto::address::Isd;
+    /// assert_eq!(Isd::MAX, Isd::new(u16::MAX));
+    /// ```
+    pub const MAX: Self = Self::new(u16::MAX);
+
+    /// The number of bits in a SCION ISD number.
     pub const BITS: u32 = u16::BITS;
 
-    /// Create a new ISD from a 16-bit value.
+    /// Creates a new ISD from a 16-bit value.
     pub const fn new(id: u16) -> Self {
         Self(id)
     }
 
     /// Return the identifier as a 16-bit value.
-    pub fn as_u16(&self) -> u16 {
+    pub const fn to_u16(&self) -> u16 {
         self.0
     }
 
@@ -37,10 +55,11 @@ impl Isd {
     /// ```
     /// # use scion_proto::address::Isd;
     /// assert!(Isd::WILDCARD.is_wildcard());
+    /// assert!(Isd::new(0).is_wildcard());
     /// assert!(!Isd::new(1).is_wildcard());
     /// ```
-    pub fn is_wildcard(&self) -> bool {
-        self == &Self::WILDCARD
+    pub const fn is_wildcard(&self) -> bool {
+        self.0 == Self::WILDCARD.0
     }
 }
 
