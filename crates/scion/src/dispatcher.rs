@@ -151,7 +151,7 @@ impl DispatcherStream {
     pub async fn send_packet_via<const N: usize>(
         &mut self,
         relay: Option<std::net::SocketAddr>,
-        packet: impl WireEncodeVec<N>,
+        packet: &impl WireEncodeVec<N>,
     ) -> Result<(), SendError> {
         // we know that the buffer is large enough
         let bytes = packet.encode_with_unchecked(&mut self.send_buffer);

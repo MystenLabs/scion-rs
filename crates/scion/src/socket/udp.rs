@@ -208,7 +208,7 @@ impl UdpSocketInner {
         self.stream
             .lock()
             .await
-            .send_packet_via(relay, packet)
+            .send_packet_via(relay, &packet)
             .await?;
         Ok(())
     }
@@ -394,7 +394,7 @@ mod tests {
                 Bytes::copy_from_slice(message),
             )?;
 
-            dispatcher.send_packet_via(Some(relay), packet).await?;
+            dispatcher.send_packet_via(Some(relay), &packet).await?;
 
             Ok(())
         }

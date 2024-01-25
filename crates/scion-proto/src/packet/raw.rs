@@ -11,6 +11,7 @@ use super::{
     FlowId,
     InadequateBufferSize,
     ScionHeaders,
+    ScionPacket,
 };
 use crate::{
     address::ScionAddr,
@@ -42,7 +43,7 @@ impl ScionPacketRaw {
     }
 }
 
-impl WireEncodeVec<2> for &ScionPacketRaw {
+impl WireEncodeVec<2> for ScionPacketRaw {
     type Error = InadequateBufferSize;
 
     fn encode_with_unchecked(&self, buffer: &mut bytes::BytesMut) -> [Bytes; 2] {
@@ -93,3 +94,5 @@ impl<T: Buf> WireDecode<T> for ScionPacketRaw {
         }
     }
 }
+
+impl ScionPacket<2> for ScionPacketRaw {}
