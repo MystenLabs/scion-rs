@@ -6,6 +6,7 @@
 //! For paths useable in a SCION packet, see the [path module][`crate::path`].
 
 pub mod error;
+use bytes::Bytes;
 pub use error::{DecodeError, EncodeError, InadequateBufferSize};
 
 pub mod headers;
@@ -31,3 +32,8 @@ pub use udp::ScionPacketUdp;
 
 mod checksum;
 pub use checksum::{ChecksumDigest, MessageChecksum};
+
+use crate::wire_encoding::{WireDecode, WireEncodeVec};
+
+/// All SCION packet types must implement this trait.
+pub trait ScionPacket<const N: usize>: WireEncodeVec<N> + WireDecode<Bytes> {}

@@ -2,7 +2,7 @@
 
 use bytes::{Buf, Bytes};
 
-use super::{InadequateBufferSize, MessageChecksum, ScionHeaders, ScionPacketRaw};
+use super::{InadequateBufferSize, MessageChecksum, ScionHeaders, ScionPacket, ScionPacketRaw};
 use crate::{
     address::SocketAddr,
     datagram::{UdpDecodeError, UdpMessage},
@@ -119,3 +119,5 @@ impl WireEncodeVec<3> for ScionPacketUdp {
         self.headers.required_capacity() + self.datagram.required_capacity()
     }
 }
+
+impl ScionPacket<3> for ScionPacketUdp {}

@@ -2,7 +2,14 @@
 
 use bytes::{Buf, Bytes};
 
-use super::{error::ScmpEncodeError, FlowId, InadequateBufferSize, ScionHeaders, ScionPacketRaw};
+use super::{
+    error::ScmpEncodeError,
+    FlowId,
+    InadequateBufferSize,
+    ScionHeaders,
+    ScionPacket,
+    ScionPacketRaw,
+};
 use crate::{
     address::ScionAddr,
     packet::ByEndpoint,
@@ -148,3 +155,5 @@ impl WireEncodeVec<3> for ScionPacketScmp {
         self.headers.required_capacity() + self.message.required_capacity()
     }
 }
+
+impl ScionPacket<3> for ScionPacketScmp {}
