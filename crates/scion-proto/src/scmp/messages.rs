@@ -168,10 +168,10 @@ impl TryFrom<ScmpMessageRaw> for ScmpMessage {
     }
 }
 
-impl WireDecode<Bytes> for ScmpMessage {
+impl<T: Buf> WireDecode<T> for ScmpMessage {
     type Error = ScmpDecodeError;
 
-    fn decode(data: &mut Bytes) -> Result<Self, Self::Error> {
+    fn decode(data: &mut T) -> Result<Self, Self::Error> {
         ScmpMessageRaw::decode(data)?.try_into()
     }
 }
