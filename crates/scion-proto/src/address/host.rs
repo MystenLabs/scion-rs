@@ -1,5 +1,3 @@
-#![allow(missing_docs)]
-
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use super::ServiceAddr;
@@ -40,9 +38,13 @@ impl From<IpAddr> for HostAddr {
 #[repr(u8)]
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum HostType {
+    /// Host type indicating no host address.
     None = 0,
+    /// Host type indicating an IPv4 host address.
     Ipv4,
+    /// Host type indicating an IPv6 host address.
     Ipv6,
+    /// Host type indicating a SCION service host address.
     Svc,
 }
 

@@ -3,8 +3,8 @@
 use super::Version;
 use crate::path::DataplanePathErrorKind;
 
-/// Errors raised when failing to decode a [`super::ScionPacketRaw`] or [`super::ScionPacketUdp`]
-/// or its constituents.
+/// Errors raised when failing to decode a [`ScionPacketRaw`][super::ScionPacketRaw] or
+/// [`ScionPacketUdp`][super::ScionPacketUdp] or its constituents.
 #[allow(missing_docs)]
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
 pub enum DecodeError {
@@ -28,8 +28,8 @@ impl From<DataplanePathErrorKind> for DecodeError {
     }
 }
 
-/// Errors raised when failing to encode a [`super::ScionPacketRaw`], [`super::ScionPacketScmp`], or
-/// [`super::ScionPacketUdp`].
+/// Errors raised when failing to encode a [`ScionPacketRaw`][super::ScionPacketRaw],
+/// [`super::ScionPacketScmp`], or [`ScionPacketUdp`][super::ScionPacketUdp].
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
 pub enum EncodeError {
     /// The payload is too large to be properly encoded in a SCION packet.
@@ -42,7 +42,7 @@ pub enum EncodeError {
     HeaderTooLarge,
 }
 
-/// Errors raised when creating a [`super::ScionPacketScmp`].
+/// Errors raised when creating a [`ScionPacketScmp`][super::ScionPacketScmp].
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy)]
 pub enum ScmpEncodeError {
     /// Some SCMP messages (notably the [`ScmpTracerouteRequest`][crate::scmp::ScmpTracerouteRequest])
@@ -60,8 +60,8 @@ pub enum ScmpEncodeError {
 /// Raised if the buffer does not have sufficient capacity for encoding the SCION headers.
 ///
 /// As the headers can be a maximum of 1020 bytes in length, it is advisable to have at
-/// least that amount of remaining space for encoding a [`super::ScionPacketRaw`] or
-/// [`super::ScionPacketUdp`] (the payload is not written to the buffer).
+/// least that amount of remaining space for encoding a [`ScionPacketRaw`][super::ScionPacketRaw] or
+/// [`ScionPacketUdp`][super::ScionPacketUdp] (the payload is not written to the buffer).
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone, Copy, Default)]
 #[error("the provided buffer did not have sufficient size")]
 pub struct InadequateBufferSize;

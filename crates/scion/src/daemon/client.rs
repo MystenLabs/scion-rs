@@ -136,7 +136,7 @@ impl Iterator for Paths {
 
     fn next(&mut self) -> Option<Self::Item> {
         for grpc_path in self.grpc_paths.by_ref() {
-            match Path::try_from_grpc_with_endpoints(grpc_path, self.isd_asn) {
+            match Path::try_from_grpc(grpc_path, self.isd_asn) {
                 Ok(path) => return Some(path),
                 Err(e) => warn!(?e, "a parse error occurred for a path"),
             }

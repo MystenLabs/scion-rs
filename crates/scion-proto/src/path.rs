@@ -2,6 +2,19 @@
 //!
 //! This module contains types for SCION paths and metadata as well as encoding and decoding
 //! functions.
+//!
+//! # Organisation
+//!
+//! - [`Path`] is the primary path type used with SCION sockets and applications. It encapsulates a
+//!   [datplane path][DataplanePath] along with optional metadata about that path, such as its
+//!   source and destination ASes, next hop on the SCION underlay, expiry time, and interface hops.
+//!
+//! - [`PathMetadata`] is metadata about a SCION [`Path`] that is communicated during beaconing or
+//!   parsed from the path.
+//!
+//! - [`DataplanePath`] represents the various SCION paths that be placed within a SCION packet,
+//!   and sent on the network. Currently, only the empty and standard SCION datplane path types are
+//!   supported (see [`standard`]).
 
 use std::{net::SocketAddr, ops::Deref};
 
@@ -12,10 +25,10 @@ use tracing::warn;
 
 use crate::{address::IsdAsn, packet::ByEndpoint, wire_encoding::WireDecode};
 
-pub mod error;
+mod error;
 pub use error::{DataplanePathErrorKind, PathParseError, PathParseErrorKind};
 
-pub mod dataplane;
+mod dataplane;
 pub use dataplane::{DataplanePath, PathType, UnsupportedPathType};
 
 pub mod standard;
@@ -34,6 +47,10 @@ pub use metadata::{GeoCoordinates, LinkType, PathInterface, PathMetadata};
 pub const PATH_MIN_MTU: u16 = 1280;
 
 /// A SCION end-to-end path with optional metadata.
+///
+/// `Path`s are generic over the underlying representation used by the [`DataplanePath`]. By
+/// default, this is a [`Bytes`] object which allows relatively cheap copying of the overall path
+/// as the Path data can then be shared across several `Path` instances.
 #[derive(Debug, Clone)]
 pub struct Path<T = Bytes> {
     /// The raw bytes to be added as the path header to SCION dataplane packets.
@@ -47,7 +64,8 @@ pub struct Path<T = Bytes> {
 }
 
 impl<T> Path<T> {
-    /// Creates a new `Path` without metadata.
+    /// Creates a new `Path` instance with the provided dataplane path, its endpoints, and the
+    /// next hop in the network underlay, but with no metadata.
     pub fn new(
         dataplane_path: DataplanePath<T>,
         isd_asn: ByEndpoint<IsdAsn>,
@@ -92,7 +110,9 @@ impl<T> Path<T> {
         self.isd_asn.destination
     }
 
-    /// Creates a new empty path between the provided ISD-ASNs.
+    /// Creates a new empty path with the provided source and destination ASes.
+    ///
+    /// For creating an empty, AS-local path see [`local()`][Self::local] instead.
     pub fn empty(isd_asn: ByEndpoint<IsdAsn>) -> Self {
         Self {
             dataplane_path: DataplanePath::EmptyPath,
@@ -168,10 +188,10 @@ where
     }
 }
 
-#[allow(missing_docs)]
 impl Path<Bytes> {
+    /// Attempts to parse the GRPC representation of a path into a [`Path`].
     #[tracing::instrument]
-    pub fn try_from_grpc_with_endpoints(
+    pub fn try_from_grpc(
         mut value: daemon_grpc::Path,
         isd_asn: ByEndpoint<IsdAsn>,
     ) -> Result<Self, PathParseError> {
@@ -249,7 +269,7 @@ mod tests {
 
     #[test]
     fn successful_empty_path() {
-        let path = Path::try_from_grpc_with_endpoints(
+        let path = Path::try_from_grpc(
             daemon_grpc::Path {
                 raw: vec![],
                 ..minimal_grpc_path()
@@ -274,7 +294,7 @@ mod tests {
 
     #[test]
     fn successful_conversion() {
-        let path = Path::try_from_grpc_with_endpoints(
+        let path = Path::try_from_grpc(
             minimal_grpc_path(),
             ByEndpoint {
                 source: IsdAsn::WILDCARD,
@@ -314,7 +334,7 @@ mod tests {
             #[test]
             fn $name() {
                 assert_eq!(
-                    Path::try_from_grpc_with_endpoints(
+                    Path::try_from_grpc(
                         daemon_grpc::Path {
                             $($field : $value,)*
                             ..minimal_grpc_path()

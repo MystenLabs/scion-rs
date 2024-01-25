@@ -5,46 +5,72 @@ use std::{
 
 use super::{error::AddressKind, AddressParseError};
 
-/// A SCION autonomous system (AS) number
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+/// A 48-bit SCION autonomous system (AS) number.
+///
+/// # Examples
+///
+/// ```
+/// # use scion_proto::address::Asn;
+/// # use std::str::FromStr;
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// assert_eq!(Asn::new(0xff00_0000_0110), "ff00:0:110".parse()?);
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct Asn(u64);
 
 impl Asn {
-    /// A SCION AS number representing the wildcard AS.
-    pub const WILDCARD: Self = Self(0);
-    /// The number of bits in a SCION AS number
+    /// A SCION AS number representing the wildcard AS number.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use scion_proto::address::Asn;
+    /// assert_eq!(Asn::WILDCARD, Asn::new(0));
+    /// ```
+    pub const WILDCARD: Self = Asn::new(0);
+
+    /// The maximum valid Asn number, equivalent to 2^48 - 1.
+    pub const MAX: Self = Self((1 << Self::BITS) - 1);
+
+    /// The number of bits in a SCION AS number.
     pub const BITS: u32 = 48;
 
     const BITS_PER_PART: u32 = 16;
     const NUMBER_PARTS: u32 = 3;
-    const MAX_VALUE: u64 = (1 << Self::BITS) - 1;
 
     /// Creates a new AS from a u64 value.
     ///
     /// # Panics
     ///
-    /// This function panics if the provided id is greater than the maximum AS number, 2^48 - 1.
-    pub fn new(id: u64) -> Self {
-        Asn::try_from(id).expect("value within AS number range")
+    /// This function panics if the provided value is greater than [`Asn::MAX.to_u64()`][Self::MAX].
+    pub const fn new(id: u64) -> Self {
+        assert!(
+            id <= Self::MAX.0,
+            "id should be less than Asn::MAX.to_u64()"
+        );
+        Self(id)
     }
 
     /// Returns the AS number as a u64 integer.
-    pub fn as_u64(&self) -> u64 {
+    pub const fn to_u64(&self) -> u64 {
         self.0
     }
 
-    /// Return true for the special 'wildcard' AS number, 0.
+    /// Return true for the special 'wildcard' AS number, zero.
     ///
     /// # Examples
     ///
     /// ```
     /// # use scion_proto::address::Asn;
     /// assert!(Asn::WILDCARD.is_wildcard());
+    /// assert!(Asn::new(0).is_wildcard());
     /// assert!(!Asn::new(1).is_wildcard());
     /// ```
-    pub fn is_wildcard(&self) -> bool {
-        self == &Self::WILDCARD
+    pub const fn is_wildcard(&self) -> bool {
+        self.0 == Self::WILDCARD.0
     }
 }
 
@@ -52,12 +78,12 @@ impl Display for Asn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         const BGP_ASN_FORMAT_BOUNDARY: u64 = u16::MAX as u64;
 
-        if self.as_u64() <= BGP_ASN_FORMAT_BOUNDARY {
-            return write!(f, "{}", self.as_u64());
+        if self.to_u64() <= BGP_ASN_FORMAT_BOUNDARY {
+            return write!(f, "{}", self.to_u64());
         }
 
         for i in (0..Asn::NUMBER_PARTS).rev() {
-            let asn_part = self.as_u64() >> (Asn::BITS_PER_PART * i) & u64::from(u16::MAX);
+            let asn_part = self.to_u64() >> (Asn::BITS_PER_PART * i) & u64::from(u16::MAX);
             let separator = if i != 0 { ":" } else { "" };
 
             write!(f, "{:x}{}", asn_part, separator)?;
@@ -69,7 +95,7 @@ impl Display for Asn {
 
 impl From<Asn> for u64 {
     fn from(value: Asn) -> Self {
-        value.as_u64()
+        value.to_u64()
     }
 }
 
@@ -77,7 +103,7 @@ impl TryFrom<u64> for Asn {
     type Error = AddressParseError;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
-        if value > Asn::MAX_VALUE {
+        if value > Asn::MAX.to_u64() {
             Err(AddressKind::Asn.into())
         } else {
             Ok(Asn(value))
@@ -138,12 +164,12 @@ mod tests {
         }
 
         test_success!(wildcard, 0, Asn::WILDCARD);
-        test_success!(max_value, Asn::MAX_VALUE, Asn(0xffff_ffff_ffff));
+        test_success!(max_value, 0xffff_ffff_ffff, Asn::MAX);
 
         #[test]
         fn out_of_range() {
             assert_eq!(
-                Asn::try_from(Asn::MAX_VALUE + 1).unwrap_err(),
+                Asn::try_from(Asn::MAX.to_u64() + 1).unwrap_err(),
                 AddressParseError(AddressKind::Asn)
             );
         }
@@ -165,7 +191,7 @@ mod tests {
         test_success!(zero_with_colon, "0:0:0", Asn::WILDCARD);
         test_success!(low_bit, "0:0:1", Asn(1));
         test_success!(high_bit, "1:0:0", Asn(0x000100000000));
-        test_success!(max, "ffff:ffff:ffff", Asn(Asn::MAX_VALUE));
+        test_success!(max, "ffff:ffff:ffff", Asn::MAX);
         test_success!(bgp_asn, "65535", Asn(65535));
 
         macro_rules! test_error {
@@ -204,7 +230,7 @@ mod tests {
 
         test_display!(large, Asn(0xff00000000ab), "ff00:0:ab");
         test_display!(large_symmetric, Asn(0x0001fcd10001), "1:fcd1:1");
-        test_display!(max, Asn(Asn::MAX_VALUE), "ffff:ffff:ffff");
+        test_display!(max, Asn::MAX, "ffff:ffff:ffff");
         test_display!(wildcard, Asn(0), "0");
         test_display!(bgp_asn, Asn(1), "1");
         test_display!(bgp_asn_max, Asn(65535), "65535");
