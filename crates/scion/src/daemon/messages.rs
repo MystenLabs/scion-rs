@@ -1,5 +1,3 @@
-#![allow(missing_docs)]
-
 use std::num::TryFromIntError;
 
 use scion_grpc::daemon::v1::{self as daemon_grpc};
@@ -33,18 +31,23 @@ impl TryFrom<daemon_grpc::AsResponse> for AsInfo {
     }
 }
 
-/// Path requests specifying source and destination ISD-ASN with some flags
+/// Path requests specifying source and destination ISD-ASN with some flags.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PathRequest {
+    /// The source ISD-ASN from which paths are requested.
     pub source: IsdAsn,
+    /// The destination ISD-ASN to which paths are requested.
     pub destination: IsdAsn,
+    /// Flags to request specific server behavior for this request.
     pub flags: PathRequestFlags,
 }
 
-/// Flags for path requests
+/// Flags for path requests.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct PathRequestFlags {
+    /// Request fresh paths for this request instead of having the server reply from its cache.
     pub refresh: bool,
+    /// Request hidden paths instead of standard paths.
     pub hidden: bool,
 }
 
@@ -60,6 +63,8 @@ impl From<&PathRequest> for daemon_grpc::PathsRequest {
 }
 
 impl PathRequest {
+    /// Creates a new `PathRequest` to the provided destination with default flags and using the
+    /// [`WILDCARD`][IsdAsn::WILDCARD] ISD-ASN indicating the local AS as the source.
     pub fn new(dst_isd_asn: IsdAsn) -> Self {
         Self {
             source: IsdAsn::WILDCARD,
@@ -68,16 +73,19 @@ impl PathRequest {
         }
     }
 
+    /// Specifies an explicit source ISD-ASN in the request.
     pub fn with_src_isd_asn(mut self, src_isd_asn: IsdAsn) -> Self {
         self.source = src_isd_asn;
         self
     }
 
+    /// Sets the [refresh][PathRequestFlags::refresh] flag for the request.
     pub fn with_refresh(mut self) -> Self {
         self.flags.refresh = true;
         self
     }
 
+    /// Sets the [hidden][PathRequestFlags::hidden] flag for the request.
     pub fn with_hidden(mut self) -> Self {
         self.flags.hidden = true;
         self

@@ -19,14 +19,17 @@ pub const DEFAULT_DAEMON_ADDRESS: &str = "https://localhost:30255";
 /// The environment variable to configure the address of the SCION daemon.
 pub const DAEMON_ADDRESS_ENV_VARIABLE: &str = "SCION_DAEMON_ADDRESS";
 
-#[allow(missing_docs)]
+/// Error type returned when attempting to communicate with the SCION daemon.
 #[derive(Debug, thiserror::Error)]
 pub enum DaemonClientError {
-    #[error("A communication error occurred: {0}")]
+    /// A communication error occurred.
+    #[error("a communication error occurred: {0}")]
     ConnectionError(#[from] tonic::transport::Error),
-    #[error("A gRPC error occurred: {0}")]
+    /// An error occurred in the gRPC protocol.
+    #[error("a gRPC error occurred: {0}")]
     GrpcError(#[from] tonic::Status),
-    #[error("Response contained invalid data")]
+    /// The data returned by the SCION daemon contained invalid data.
+    #[error("response contained invalid data")]
     InvalidData,
 }
 

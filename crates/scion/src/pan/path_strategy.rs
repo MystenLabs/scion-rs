@@ -1,4 +1,12 @@
 //! Strategies for caching and selecting paths.
+//!
+//! A path strategy must implement the trait [`PathStrategy`]. In practice, it will be used with a controller
+//! like the [`AsyncPathStrategy`], which also implements the [`AsyncPathService`][super::AsyncPathService]
+//! trait.
+//!
+//! For concrete types implementing [`PathStrategy`], see [`PathRefresher`][refresher::PathRefresher] and
+//! [`UniformStrategy`][uniform::UniformStrategy].
+
 use std::time::{Duration, Instant};
 
 use scion_proto::{address::IsdAsn, path::Path};
