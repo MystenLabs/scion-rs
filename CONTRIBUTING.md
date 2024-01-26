@@ -27,8 +27,8 @@ We have CI jobs running for every PR to test and lint the repository. You can in
 that these check pass even *before pushing your changes* to GitHub. To use this, the following steps are required:
 
 1. Install [Rust](https://www.rust-lang.org/tools/install).
-1. Install [cargo-deny](https://embarkstudios.github.io/cargo-deny/cli/index.html).
 1. [Install pre-commit](https://pre-commit.com/#install) using `pip` or your OS's package manager.
+1. Install required cargo tools: `cargo install cargo-sort cargo-deny``
 1. Run `pre-commit install` in the repository.
 
 After this setup, the code will be checked, reformatted, and tested whenever you create a Git commit.
@@ -45,11 +45,13 @@ To analyze test coverage, we use [Tarpaulin](https://crates.io/crates/cargo-tarp
 
 ```sh
 cargo install cargo-tarpaulin
-cargo tarpaulin --workspace --all-targets --doc --out html
+cargo tarpaulin --workspace --skip-clean --lib --bins --examples --tests --doc --out html
 ```
 
 This creates a file `tarpaulin-report.html`, which shows you coverage statistics as well as which individual lines are or aren't covered by tests.
 Other valid output formats are `json`, `stdout`, `xml`, and `lcov`.
+
+The exact command we use in our CI pipeline is visible in [.github/workflows/rust.yml](.github/workflows/rust.yml).
 
 ## Integration tests
 
@@ -65,7 +67,7 @@ can run integration tests like this:
 SCION_DAEMON_ADDRESS="http://192.168.0.42:12345" cargo test -- --ignored
 ```
 
-For the integration tests, we use the
+The following section describes how to set up the SCION components used for integration tests locally.
 
 ### Local SCION topology with multipass
 
