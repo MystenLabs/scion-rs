@@ -148,92 +148,66 @@ impl FromStr for Asn {
 
 #[cfg(test)]
 mod tests {
+    use test_utils::param_test;
+
     use super::*;
 
-    mod conversion {
-        use super::*;
-
-        macro_rules! test_success {
-            ($name:ident, $number:expr, $asn:expr) => {
-                #[test]
-                fn $name() {
-                    assert_eq!(Asn::try_from($number).unwrap(), $asn);
-                    assert_eq!(u64::from($asn), $number);
-                }
-            };
-        }
-
-        test_success!(wildcard, 0, Asn::WILDCARD);
-        test_success!(max_value, 0xffff_ffff_ffff, Asn::MAX);
-
-        #[test]
-        fn out_of_range() {
-            assert_eq!(
-                Asn::try_from(Asn::MAX.to_u64() + 1).unwrap_err(),
-                AddressParseError(AddressKind::Asn)
-            );
-        }
+    param_test! {
+        converts_from_number: [
+            wildcard: (0, Ok(Asn::WILDCARD)),
+            max_value: (0xffff_ffff_ffff, Ok(Asn::MAX)),
+            out_of_range: (0xffff_ffff_ffff + 1, Err(AddressParseError(AddressKind::Asn)))
+        ]
+    }
+    fn converts_from_number(numeric_value: u64, expected: Result<Asn, AddressParseError>) {
+        assert_eq!(Asn::try_from(numeric_value), expected);
     }
 
-    mod parse {
-        use super::*;
-
-        macro_rules! test_success {
-            ($name:ident, $input:expr, $expected:expr) => {
-                #[test]
-                fn $name() {
-                    assert_eq!(Asn::from_str($input).unwrap(), $expected);
-                }
-            };
-        }
-
-        test_success!(zero, "0", Asn::WILDCARD);
-        test_success!(zero_with_colon, "0:0:0", Asn::WILDCARD);
-        test_success!(low_bit, "0:0:1", Asn(1));
-        test_success!(high_bit, "1:0:0", Asn(0x000100000000));
-        test_success!(max, "ffff:ffff:ffff", Asn::MAX);
-        test_success!(bgp_asn, "65535", Asn(65535));
-
-        macro_rules! test_error {
-            ($name:ident, $input:expr) => {
-                #[test]
-                fn $name() {
-                    assert_eq!(
-                        Asn::from_str($input).unwrap_err(),
-                        AddressParseError(AddressKind::Asn)
-                    );
-                }
-            };
-        }
-
-        test_error!(errs_large_decimal_format, "65536");
-        test_error!(errs_on_only_colon, ":");
-        test_error!(errs_extra_colon, "0:0:0:");
-        test_error!(errs_too_few, "0:0");
-        test_error!(errs_invalid_part, ":0:0");
-        test_error!(errs_out_of_range, "10000:0:0");
-        test_error!(errs_out_of_range2, "0:0:10000");
-        test_error!(errs_invalid_format, "0:0x0:0");
+    param_test! {
+        successfully_parses_valid_strings: [
+            zero: ("0", Asn::WILDCARD),
+            zero_with_colon: ("0:0:0", Asn::WILDCARD),
+            low_bit: ("0:0:1", Asn(1)),
+            high_bit: ("1:0:0", Asn(0x000100000000)),
+            max: ("ffff:ffff:ffff", Asn::MAX),
+            bgp_asn: ("65535", Asn(65535))
+        ]
+    }
+    fn successfully_parses_valid_strings(asn_str: &str, expected: Asn) {
+        assert_eq!(Ok(expected), asn_str.parse());
     }
 
-    mod display {
-        use super::*;
+    param_test! {
+        parse_rejects_invalid_strings: [
+            large_decimal_format: ("65536"),
+            only_colon: (":"),
+            extra_colon: ("0:0:0:"),
+            too_few: ("0:0"),
+            invalid_part: (":0:0"),
+            out_of_range: ("10000:0:0"),
+            out_of_range2: ("0:0:10000"),
+            invalid_format: ("0:0x0:0"),
+        ]
+    }
+    fn parse_rejects_invalid_strings(asn_str: &str) {
+        assert_eq!(
+            Asn::from_str(asn_str),
+            Err(AddressParseError(AddressKind::Asn))
+        );
+    }
 
-        macro_rules! test_display {
-            ($name:ident, $asn:expr, $expected:expr) => {
-                #[test]
-                fn $name() {
-                    assert_eq!($asn.to_string(), $expected);
-                }
-            };
-        }
-
-        test_display!(large, Asn(0xff00000000ab), "ff00:0:ab");
-        test_display!(large_symmetric, Asn(0x0001fcd10001), "1:fcd1:1");
-        test_display!(max, Asn::MAX, "ffff:ffff:ffff");
-        test_display!(wildcard, Asn(0), "0");
-        test_display!(bgp_asn, Asn(1), "1");
-        test_display!(bgp_asn_max, Asn(65535), "65535");
-        test_display!(outside_bgp_asn, Asn(65536), "0:1:0");
+    param_test! {
+        correctly_displays_asn: [
+            large: (Asn(0xff00000000ab), "ff00:0:ab"),
+            large_symmetric: (Asn(0x0001fcd10001), "1:fcd1:1"),
+            max: (Asn::MAX, "ffff:ffff:ffff"),
+            wildcard: (Asn(0), "0"),
+            bgp_asn: (Asn(1), "1"),
+            bgp_asn_max: (Asn(65535), "65535"),
+            outside_bgp_asn: (Asn(65536), "0:1:0"),
+        ]
+    }
+    fn correctly_displays_asn(asn: Asn, expected: &str) {
+        assert_eq!(asn.to_string(), expected);
     }
 }

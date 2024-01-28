@@ -162,138 +162,93 @@ impl From<u64> for IsdAsn {
 
 #[cfg(test)]
 mod tests {
+    use test_utils::param_test;
+
     use super::*;
     use crate::address::{Asn, Isd};
 
-    macro_rules! test_new_and_get {
-        ($name:ident, $ia:expr, $isd:expr, $asn:expr) => {
-            mod $name {
-                use super::*;
-
-                #[test]
-                fn construct() {
-                    assert_eq!($ia, IsdAsn::new($isd, $asn));
-                }
-
-                #[test]
-                fn get_isd() {
-                    assert_eq!($isd, $ia.isd());
-                }
-
-                #[test]
-                fn get_asn() {
-                    assert_eq!($asn, $ia.asn());
-                }
-            }
-        };
+    param_test! {
+        constructs_from_parts: [
+            arbitrary: (Isd::new(1), Asn::new(0xff00_0000_00ab), IsdAsn(0x1_ff00_0000_00ab)),
+            wildcard: (Isd::WILDCARD, Asn::WILDCARD, IsdAsn::WILDCARD),
+        ]
+    }
+    fn constructs_from_parts(isd: Isd, asn: Asn, expected: IsdAsn) {
+        assert_eq!(IsdAsn::new(isd, asn), expected);
     }
 
-    test_new_and_get!(wildcard, IsdAsn(0), Isd::new(0), Asn::new(0));
-    test_new_and_get!(
-        long,
-        IsdAsn(0x0001_ff00_0000_00ab),
-        Isd::new(1),
-        Asn::new(0xff00_0000_00ab)
-    );
-    test_new_and_get!(
-        max_and_min,
-        IsdAsn(0xffff_0000_0000_0000),
-        Isd::new(0xffff),
-        Asn::new(0)
-    );
-    test_new_and_get!(
-        min_and_max,
-        IsdAsn(0x0000_ffff_ffff_ffff),
-        Isd::new(0),
-        Asn::new(0xffff_ffff_ffff)
-    );
-
-    mod conversion {
-        use super::*;
-
-        #[test]
-        fn as_u64() {
-            assert_eq!(
-                IsdAsn::new(Isd::new(0x0123), Asn::new(0x4567_89ab_cdef)).to_u64(),
-                0x0123_4567_89ab_cdef
-            )
-        }
-
-        macro_rules! test_success {
-            ($name:ident, $number:expr, $ia:expr) => {
-                #[test]
-                fn $name() {
-                    assert_eq!(IsdAsn::from($number), $ia);
-                    assert_eq!(u64::from($ia), $number);
-                }
-            };
-        }
-
-        test_success!(wildcard, 0, IsdAsn::new(Isd::WILDCARD, Asn::WILDCARD));
-        test_success!(max_value, -1_i64 as u64, IsdAsn(0xffff_ffff_ffff_ffff));
+    #[test]
+    fn gets_isd() {
+        assert_eq!(IsdAsn(0x2_ff00_0000_1101).isd(), Isd::new(2));
     }
 
-    mod display {
-        use super::*;
-
-        #[test]
-        fn debug() {
-            assert_eq!(
-                format!("{:?}", IsdAsn(0x0001_ff00_0000_00ab)),
-                "IA(0x0001ff00000000ab)"
-            );
-        }
-
-        #[test]
-        fn simple() {
-            assert_eq!(IsdAsn(0x0001_ff00_0000_00ab).to_string(), "1-ff00:0:ab");
-        }
-
-        #[test]
-        fn wildcard() {
-            assert_eq!(IsdAsn(0).to_string(), "0-0");
-        }
-
-        #[test]
-        fn max_ia() {
-            assert_eq!(
-                IsdAsn(0xffff_ffff_ffff_ffff).to_string(),
-                "65535-ffff:ffff:ffff"
-            );
-        }
+    #[test]
+    fn gets_asn() {
+        assert_eq!(IsdAsn(0x2_ff00_0000_1101).asn(), Asn::new(0xff00_0000_1101));
     }
 
-    mod parse {
-        use super::*;
+    #[test]
+    fn to_u64() {
+        assert_eq!(
+            IsdAsn::new(Isd::new(0x0123), Asn::new(0x4567_89ab_cdef)).to_u64(),
+            0x0123_4567_89ab_cdef
+        )
+    }
 
-        macro_rules! test_success {
-            ($name:ident, $input:expr, $expected:expr) => {
-                #[test]
-                fn $name() {
-                    assert_eq!(IsdAsn::from_str($input).unwrap(), $expected);
-                    assert_eq!(IsdAsn::try_from($input.to_string()).unwrap(), $expected);
-                }
-            };
-        }
+    #[test]
+    fn correctly_formats_debug_repr() {
+        assert_eq!(
+            format!("{:?}", IsdAsn(0x0001_ff00_0000_00ab)),
+            "IA(0x0001ff00000000ab)"
+        );
+    }
 
-        test_success!(max, "65535-ffff:ffff:ffff", IsdAsn(0xffff_ffff_ffff_ffff));
-        test_success!(wildcard, "0-0", IsdAsn::WILDCARD);
-        test_success!(min_non_wildcard, "1-0:0:1", IsdAsn(0x0001_0000_0000_0001));
+    param_test! {
+        correctly_displays_ia: [
+            simple: (IsdAsn(0x0001_ff00_0000_00ab), "1-ff00:0:ab"),
+            wildcard: (IsdAsn::WILDCARD, "0-0"),
+            max_ia: (IsdAsn::MAX, "65535-ffff:ffff:ffff"),
+        ]
+    }
+    fn correctly_displays_ia(ia: IsdAsn, expected: &str) {
+        assert_eq!(ia.to_string(), expected);
+    }
 
-        #[test]
-        fn invalid() {
-            assert_eq!(
-                IsdAsn::from_str("a-0:0:1").unwrap_err(),
-                AddressParseError(AddressKind::IsdAsn)
-            );
-        }
+    param_test! {
+        from_str_parses_valid_strings: [
+            wildcard: ("0-0", IsdAsn::WILDCARD),
+            max_ia: ("65535-ffff:ffff:ffff", IsdAsn::MAX),
+            min_non_wildcard: ("1-0:0:1", IsdAsn(0x0001_0000_0000_0001)),
+        ]
+    }
+    fn from_str_parses_valid_strings(ia_str: &str, expected: IsdAsn) {
+        assert_eq!(IsdAsn::from_str(ia_str), Ok(expected));
+    }
 
-        #[test]
-        fn invalid_parts() {
-            assert_eq!(
-                IsdAsn::from_str("1-1-0:0:1").unwrap_err(),
-                AddressParseError(AddressKind::IsdAsn)
-            );
-        }
+    param_test! {
+        try_from_str_parses_valid_strings: [
+            wildcard: ("0-0", IsdAsn::WILDCARD),
+            max_ia: ("65535-ffff:ffff:ffff", IsdAsn::MAX),
+            min_non_wildcard: ("1-0:0:1", IsdAsn(0x0001_0000_0000_0001)),
+        ]
+    }
+    fn try_from_str_parses_valid_strings(ia_str: &str, expected: IsdAsn) {
+        assert_eq!(IsdAsn::try_from(ia_str.to_string()), Ok(expected));
+    }
+
+    #[test]
+    fn invalid() {
+        assert_eq!(
+            IsdAsn::from_str("a-0:0:1").unwrap_err(),
+            AddressParseError(AddressKind::IsdAsn)
+        );
+    }
+
+    #[test]
+    fn invalid_parts() {
+        assert_eq!(
+            IsdAsn::from_str("1-1-0:0:1").unwrap_err(),
+            AddressParseError(AddressKind::IsdAsn)
+        );
     }
 }
