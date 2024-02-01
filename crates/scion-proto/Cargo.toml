@@ -9,7 +9,7 @@ publish = false
 bytes = { workspace = true }
 chrono = { workspace = true }
 scion-grpc = { workspace = true }
-serde = { version = "1.0.188", features = ["derive"] }
+serde = { version = "1.0.196", features = ["derive"] }
 sha2 = "0.10.8"
 thiserror = { workspace = true }
 tracing = { workspace = true }
