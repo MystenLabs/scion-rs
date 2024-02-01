@@ -216,7 +216,8 @@ where
             };
 
             tracing::debug!(
-                callback_time=?callback_time.duration_since(start), "waiting for paths or callback timeout"
+                callback_time=?callback_time.duration_since(start),
+                "waiting for paths or callback timeout"
             );
 
             // Wait for the callback duration, or until a pending path query completes. If there
@@ -407,7 +408,8 @@ mod tests {
                 ) -> Result<Option<&'a Path>, PathFetchError>;
                 fn poll_requests(&mut self, now: Instant) -> Request;
                 fn handle_lookup_paths(&mut self, paths: &[Path], now: Instant);
-                fn is_path_available(&self, destination: IsdAsn, now: Instant) -> Result<bool, PathFetchError>;
+                fn is_path_available(&self, destination: IsdAsn, now: Instant)
+                    -> Result<bool, PathFetchError>;
             }
         }
 

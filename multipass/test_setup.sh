@@ -11,4 +11,5 @@ export SCION_DISPATCHER_PATH=/tmp/dispatcher.sock
 export SCION_DAEMON_ADDRESS="[$VM_ADDRESS]:30255"
 
 rm -f $SCION_DISPATCHER_PATH
-ssh -i multipass/test_id_ed25519 ubuntu@$VM_ADDRESS -fN -L $SCION_DISPATCHER_PATH:/run/shm/dispatcher/default.sock
+ssh -i multipass/test_id_ed25519 ubuntu@$VM_ADDRESS -fN -L \
+    $SCION_DISPATCHER_PATH:/run/shm/dispatcher/default.sock
