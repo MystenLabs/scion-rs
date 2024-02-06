@@ -23,6 +23,16 @@ pub trait ScmpMessageBase {
     fn code(&self) -> u8 {
         0
     }
+
+    /// Returns true iff `self` is an error message.
+    fn is_error(&self) -> bool {
+        self.get_type().is_error()
+    }
+
+    /// Returns true iff `self` is an informational message.
+    fn is_informational(&self) -> bool {
+        self.get_type().is_informational()
+    }
 }
 
 /// SCION protocol number for SCMP.

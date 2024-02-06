@@ -14,7 +14,7 @@ use scion_proto::{
     packet::{ByEndpoint, MessageChecksum, ScionPacketRaw, ScionPacketUdp},
     path::{DataplanePath, Path},
     reliable::Packet,
-    scmp::{ScmpMessage, SCMP_PROTOCOL_NUMBER},
+    scmp::{ScmpDecodeError, ScmpErrorMessage, SCMP_PROTOCOL_NUMBER},
     wire_encoding::WireDecode,
 };
 use tokio::sync::Mutex;
@@ -160,7 +160,7 @@ enum InternalReceiveError {
     InvalidPacket,
     /// An SCMP error message was received.
     #[error("an SCMP error message was received: {0}")]
-    ScmpError(ScmpMessage),
+    ScmpError(ScmpErrorMessage),
 }
 
 #[derive(Debug)]
@@ -277,15 +277,16 @@ impl UdpSocketInner {
         ))?;
 
         if scion_packet.headers.common.next_header == SCMP_PROTOCOL_NUMBER {
-            let scmp_message = ScmpMessage::decode(&mut scion_packet.payload).map_err(log_err!(
-                "received SCMP message but failed to decode",
-                InternalReceiveError::InvalidPacket
-            ))?;
-            return Err(if scmp_message.is_error() {
-                InternalReceiveError::ScmpError(scmp_message)
-            } else {
-                tracing::debug!("received unexpected SCMP informational message");
-                InternalReceiveError::InvalidPacket
+            return Err(match ScmpErrorMessage::decode(&mut scion_packet.payload) {
+                Ok(e) => InternalReceiveError::ScmpError(e),
+                Err(ScmpDecodeError::MessageTypeMismatch) => {
+                    tracing::debug!("received unexpected SCMP informational message");
+                    InternalReceiveError::InvalidPacket
+                }
+                Err(_) => {
+                    tracing::debug!("received SCMP message but failed to decode");
+                    InternalReceiveError::InvalidPacket
+                }
             });
         }
 

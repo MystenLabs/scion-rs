@@ -6,6 +6,7 @@ use super::{
     error::ScmpEncodeError,
     FlowId,
     InadequateBufferSize,
+    MessageChecksum,
     ScionHeaders,
     ScionPacket,
     ScionPacketRaw,
@@ -14,7 +15,14 @@ use crate::{
     address::ScionAddr,
     packet::ByEndpoint,
     path::{DataplanePath, Path},
-    scmp::{ScmpDecodeError, ScmpMessage, ScmpTracerouteRequest, ScmpType, SCMP_PROTOCOL_NUMBER},
+    scmp::{
+        ScmpDecodeError,
+        ScmpMessage,
+        ScmpMessageBase,
+        ScmpTracerouteRequest,
+        ScmpType,
+        SCMP_PROTOCOL_NUMBER,
+    },
     wire_encoding::{WireDecode, WireEncodeVec},
 };
 
@@ -27,10 +35,13 @@ pub struct ScionPacketScmp {
     pub message: ScmpMessage,
 }
 
-impl ScionPacketScmp {
-    /// Returns the SCMP message type.
-    pub fn get_type(&self) -> ScmpType {
+impl ScmpMessageBase for ScionPacketScmp {
+    fn get_type(&self) -> ScmpType {
         self.message.get_type()
+    }
+
+    fn code(&self) -> u8 {
+        self.message.code()
     }
 }
 

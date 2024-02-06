@@ -6,8 +6,8 @@ use scion::{
 };
 use scion_proto::{
     address::{ScionAddr, SocketAddr},
-    packet::{ByEndpoint, ScionPacketScmp},
-    scmp::{ScmpInformationalMessage, ScmpMessage, ScmpTracerouteRequest},
+    packet::{ByEndpoint, MessageChecksum, ScionPacketScmp},
+    scmp::{ScmpMessage, ScmpTracerouteRequest},
     wire_encoding::WireDecode,
 };
 
