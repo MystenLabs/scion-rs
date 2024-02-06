@@ -19,6 +19,9 @@ use crate::{
 /// There is an [`UnknownError`][Self::UnknownError] variant, but no `UnknownInformational`, because
 /// the specification states:
 /// "If an SCMP informational message of unknown type is received, it MUST be silently dropped."
+///
+/// There are separate enum types [`ScmpErrorMessage`] and [`ScmpInformationalMessage`] that only include
+/// error and informational messages, respectively.
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum ScmpMessage {
     /// An SCMP DestinationUnreachable message.
@@ -66,6 +69,72 @@ pub enum ScmpMessage {
     UnknownError(ScmpMessageRaw),
 }
 
+/// Fully decoded SCMP error message with an appropriate format.
+///
+/// The different variants correspond to the [`ScmpType`] variants.
+///
+/// See [`ScmpInformationalMessage`] for informational messages and [`ScmpMessage`] for an enum that includes
+/// both error and informational messages.
+#[derive(Debug, PartialEq, Clone, Eq)]
+pub enum ScmpErrorMessage {
+    /// An SCMP DestinationUnreachable message.
+    ///
+    /// See [`ScmpDestinationUnreachable`] for further details.
+    DestinationUnreachable(ScmpDestinationUnreachable),
+    /// An SCMP PacketTooBig message.
+    ///
+    /// See [`ScmpPacketTooBig`] for further details.
+    PacketTooBig(ScmpPacketTooBig),
+    /// An SCMP ParameterProblem message.
+    ///
+    /// See [`ScmpParameterProblem`] for further details.
+    ParameterProblem(ScmpParameterProblem),
+    /// An SCMP ExternalInterfaceDown message.
+    ///
+    /// See [`ScmpExternalInterfaceDown`] for further details.
+    ExternalInterfaceDown(ScmpExternalInterfaceDown),
+    /// An SCMP InternalConnectivityDown message.
+    ///
+    /// See [`ScmpInternalConnectivityDown`] for further details.
+    InternalConnectivityDown(ScmpInternalConnectivityDown),
+    /// An SCMP error message whose type is unknown.
+    ///
+    /// This is needed because the specification states:
+    /// "If an SCMP error message of unknown type is received at its destination, it MUST be passed
+    /// to the upper-layer process that originated the packet that caused the error, if it can be
+    /// identified."
+    Unknown(ScmpMessageRaw),
+}
+
+/// Fully decoded SCMP informational message with an appropriate format.
+///
+/// The different variants correspond to the [`ScmpType`] variants.
+///
+/// There is no `Unknown` variant, because the specification states:
+/// "If an SCMP informational message of unknown type is received, it MUST be silently dropped."
+///
+/// See [`ScmpErrorMessage`] for error messages and [`ScmpMessage`] for an enum that includes both error and
+/// informational messages.
+#[derive(Debug, PartialEq, Clone, Eq)]
+pub enum ScmpInformationalMessage {
+    /// An SCMP EchoRequest message.
+    ///
+    /// See [`ScmpEchoRequest`] for further details.
+    EchoRequest(ScmpEchoRequest),
+    /// An SCMP EchoReply message.
+    ///
+    /// See [`ScmpEchoReply`] for further details.
+    EchoReply(ScmpEchoReply),
+    /// An SCMP TracerouteRequest message.
+    ///
+    /// See [`ScmpTracerouteRequest`] for further details.
+    TracerouteRequest(ScmpTracerouteRequest),
+    /// An SCMP TracerouteReply message.
+    ///
+    /// See [`ScmpTracerouteReply`] for further details.
+    TracerouteReply(ScmpTracerouteReply),
+}
+
 macro_rules! call_method_on_scmp_variants {
     ($self:ident.$name:ident($($param:ident),*)) => {
         match $self {
@@ -83,57 +152,181 @@ macro_rules! call_method_on_scmp_variants {
     };
 }
 
-macro_rules! lift_fn_from_scmp_variants {
-    (
-        $(#[$outer:meta])*
-        $vis:vis fn $name:ident(self$(: $self_ty:ty)? $(,$param:ident : $param_type:ty)*) -> $return_type:ty
-    ) => {
-        $(#[$outer])*
-        $vis fn $name(self$(: $self_ty)? $(,$param : $param_type)*) -> $return_type {
-            call_method_on_scmp_variants!(self.$name($($param),*))
+macro_rules! call_method_on_scmp_error_variants {
+    ($self:ident.$name:ident($($param:ident),*)) => {
+        match $self {
+            Self::DestinationUnreachable(x) => x.$name($($param),*),
+            Self::PacketTooBig(x) => x.$name($($param),*),
+            Self::ParameterProblem(x) => x.$name($($param),*),
+            Self::ExternalInterfaceDown(x) => x.$name($($param),*),
+            Self::InternalConnectivityDown(x) => x.$name($($param),*),
+            Self::Unknown(x) => x.$name($($param),*),
         }
     };
 }
 
+macro_rules! call_method_on_scmp_info_variants {
+    ($self:ident.$name:ident($($param:ident),*)) => {
+        match $self {
+            Self::EchoRequest(x) => x.$name($($param),*),
+            Self::EchoReply(x) => x.$name($($param),*),
+            Self::TracerouteRequest(x) => x.$name($($param),*),
+            Self::TracerouteReply(x) => x.$name($($param),*),
+        }
+    };
+}
+
+macro_rules! lift_fn_from_scmp_variants {
+    (all; $($x:tt)*) => {
+        lift_fn_from_scmp_variants!(call_method_on_scmp_variants; $($x)*);
+    };
+    (error; $($x:tt)*) => {
+        lift_fn_from_scmp_variants!(call_method_on_scmp_error_variants; $($x)*);
+    };
+    (info; $($x:tt)*) => {
+        lift_fn_from_scmp_variants!(call_method_on_scmp_info_variants; $($x)*);
+    };
+    (
+        $call_method:ident;
+        $(#[$outer:meta])*
+        $vis:vis fn $name:ident(self$(: $self_ty:ty)? $(,$param:ident : $param_type:ty)*) $(-> $ret_ty:ty)?
+    ) => {
+        $(#[$outer])*
+        $vis fn $name(self$(: $self_ty)? $(,$param : $param_type)*) $(-> $ret_ty)? {
+            $call_method!(self.$name($($param),*))
+        }
+    };
+}
+
+macro_rules! implement_methods_for_scmp_enum {
+    (
+        $name:ident, $call_method:ident
+    ) => {
+        impl ScmpMessageBase for $name {
+            lift_fn_from_scmp_variants!(
+                $call_method;
+                fn get_type(self: &Self) -> ScmpType
+            );
+
+            lift_fn_from_scmp_variants!(
+                $call_method;
+                fn code(self: &Self) -> u8
+            );
+        }
+
+        impl Display for $name {
+            lift_fn_from_scmp_variants!(
+                $call_method;
+                fn fmt(self: &Self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+            );
+        }
+
+        impl<T: Buf> WireDecode<T> for $name {
+            type Error = ScmpDecodeError;
+
+            fn decode(data: &mut T) -> Result<Self, Self::Error> {
+                ScmpMessageRaw::decode(data)?.try_into()
+            }
+        }
+
+        impl WireEncodeVec<2> for $name {
+            type Error = InadequateBufferSize;
+
+            lift_fn_from_scmp_variants!(
+                $call_method;
+                fn encode_with_unchecked(self: &Self, buffer: &mut bytes::BytesMut) -> [Bytes; 2]
+            );
+
+            lift_fn_from_scmp_variants!(
+                $call_method;
+                fn total_length(self: &Self) -> usize
+            );
+
+            lift_fn_from_scmp_variants!(
+                $call_method;
+                fn required_capacity(self: &Self) -> usize
+            );
+        }
+
+        impl MessageChecksum for $name {
+            lift_fn_from_scmp_variants!(
+                $call_method;
+                fn checksum(self: &Self) -> u16
+            );
+
+            lift_fn_from_scmp_variants!(
+                $call_method;
+                fn set_checksum(self: &mut Self, address_header: &AddressHeader)
+            );
+
+
+            lift_fn_from_scmp_variants!(
+                $call_method;
+                fn calculate_checksum(self: &Self, address_header: &AddressHeader) -> u16
+            );
+        }
+    };
+}
+
+implement_methods_for_scmp_enum!(ScmpMessage, all);
+implement_methods_for_scmp_enum!(ScmpErrorMessage, error);
+implement_methods_for_scmp_enum!(ScmpInformationalMessage, info);
+
 impl ScmpMessage {
-    lift_fn_from_scmp_variants!(
-        /// Returns the type of the corresponding message.
-        pub fn get_type(self: &Self) -> ScmpType
-    );
-
-    lift_fn_from_scmp_variants!(
-        /// Returns the code field of the corresponding message.
-        pub fn code(self: &Self) -> u8
-    );
-
-    lift_fn_from_scmp_variants!(
-        /// Returns true if the checksum successfully verifies, otherwise false.
-        pub fn verify_checksum(self: &Self, address_header: &AddressHeader) -> bool
-    );
-
-    lift_fn_from_scmp_variants!(
-        /// Returns true if the checksum successfully verifies, otherwise false.
-        pub fn set_checksum(self: &mut Self, address_header: &AddressHeader) -> ()
-    );
-
-    /// Returns true iff `self` is an error message.
-    pub fn is_error(&self) -> bool {
-        self.get_type().is_error()
-    }
-
-    /// Returns true iff `self` is an informational message.
-    pub fn is_informational(&self) -> bool {
-        self.get_type().is_informational()
-    }
-
     /// Returns true for all supported SCMP messages and false otherwise.
     pub fn is_supported(&self) -> bool {
         !matches!(self, Self::UnknownError(_))
     }
 }
 
-impl Display for ScmpMessage {
-    lift_fn_from_scmp_variants!(fn fmt(self: &Self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result);
+impl ScmpErrorMessage {
+    /// Returns true for all supported SCMP error messages and false otherwise.
+    pub fn is_supported(&self) -> bool {
+        !matches!(self, Self::Unknown(_))
+    }
+
+    /// Get the (truncated) packet that triggered the error.
+    ///
+    /// For [`ScmpErrorMessage::Unknown`] instances, the whole message payload is returned.
+    pub fn get_offending_packet(&self) -> Bytes {
+        match self {
+            ScmpErrorMessage::DestinationUnreachable(x) => x.get_offending_packet(),
+            ScmpErrorMessage::PacketTooBig(x) => x.get_offending_packet(),
+            ScmpErrorMessage::ParameterProblem(x) => x.get_offending_packet(),
+            ScmpErrorMessage::ExternalInterfaceDown(x) => x.get_offending_packet(),
+            ScmpErrorMessage::InternalConnectivityDown(x) => x.get_offending_packet(),
+            ScmpErrorMessage::Unknown(x) => x.payload.clone(),
+        }
+    }
+}
+
+impl ScmpInformationalMessage {
+    lift_fn_from_scmp_variants!(
+        info;
+
+        /// Get the message's identifier.
+        pub fn get_identifier(self: &Self) -> u16
+    );
+
+    lift_fn_from_scmp_variants!(
+        info;
+        /// Get the message's sequence number.
+        pub fn get_sequence_number(self: &Self) -> u16
+    );
+
+    lift_fn_from_scmp_variants!(
+        info;
+        /// Get the combination of the message's identifier and sequence number.
+        ///
+        /// This can be used to match reply messages to their corresponding requests.
+        pub fn get_message_id(self: &Self) -> u32
+    );
+
+    lift_fn_from_scmp_variants!(
+        info;
+        /// Encodes the identifier and sequence number to the provided buffer.
+        pub fn encode_message_id_unchecked(self: &Self, buffer: &mut impl BufMut)
+    );
 }
 
 impl TryFrom<ScmpMessageRaw> for ScmpMessage {
@@ -168,24 +361,47 @@ impl TryFrom<ScmpMessageRaw> for ScmpMessage {
     }
 }
 
-impl<T: Buf> WireDecode<T> for ScmpMessage {
+impl TryFrom<ScmpMessageRaw> for ScmpErrorMessage {
     type Error = ScmpDecodeError;
 
-    fn decode(data: &mut T) -> Result<Self, Self::Error> {
-        ScmpMessageRaw::decode(data)?.try_into()
+    fn try_from(value: ScmpMessageRaw) -> Result<Self, Self::Error> {
+        Ok(match value.message_type {
+            ScmpType::DestinationUnreachable => {
+                Self::DestinationUnreachable(ScmpDestinationUnreachable::try_from(value)?)
+            }
+            ScmpType::PacketTooBig => Self::PacketTooBig(ScmpPacketTooBig::try_from(value)?),
+            ScmpType::ParameterProblem => {
+                Self::ParameterProblem(ScmpParameterProblem::try_from(value)?)
+            }
+            ScmpType::ExternalInterfaceDown => {
+                Self::ExternalInterfaceDown(ScmpExternalInterfaceDown::try_from(value)?)
+            }
+            ScmpType::InternalConnectivityDown => {
+                Self::InternalConnectivityDown(ScmpInternalConnectivityDown::try_from(value)?)
+            }
+            ScmpType::OtherError(_) => Self::Unknown(value),
+            _ => return Err(ScmpDecodeError::MessageTypeMismatch),
+        })
     }
 }
 
-impl WireEncodeVec<2> for ScmpMessage {
-    type Error = InadequateBufferSize;
+impl TryFrom<ScmpMessageRaw> for ScmpInformationalMessage {
+    type Error = ScmpDecodeError;
 
-    lift_fn_from_scmp_variants!(
-        fn encode_with_unchecked(self: &Self, buffer: &mut bytes::BytesMut) -> [Bytes; 2]
-    );
-
-    lift_fn_from_scmp_variants!(fn total_length(self: &Self) -> usize);
-
-    lift_fn_from_scmp_variants!(fn required_capacity(self: &Self) -> usize);
+    fn try_from(value: ScmpMessageRaw) -> Result<Self, Self::Error> {
+        Ok(match value.message_type {
+            ScmpType::EchoRequest => Self::EchoRequest(ScmpEchoRequest::try_from(value)?),
+            ScmpType::EchoReply => Self::EchoReply(ScmpEchoReply::try_from(value)?),
+            ScmpType::TracerouteRequest => {
+                Self::TracerouteRequest(ScmpTracerouteRequest::try_from(value)?)
+            }
+            ScmpType::TracerouteReply => {
+                Self::TracerouteReply(ScmpTracerouteReply::try_from(value)?)
+            }
+            ScmpType::OtherInfo(t) => return Err(ScmpDecodeError::UnknownInfoMessage(t)),
+            _ => return Err(ScmpDecodeError::MessageTypeMismatch),
+        })
+    }
 }
 
 trait ScmpMessageEncodeDecode: ScmpMessageBase + MessageChecksum + Sized {
@@ -239,12 +455,6 @@ impl<T: ScmpMessageEncodeDecode> WireEncodeVec<2> for T {
     }
 }
 
-/// Trait implemented by all SCMP error messages.
-pub trait ScmpErrorMessage: ScmpMessageBase + MessageChecksum {
-    /// Get the (truncated) packet that triggered the error.
-    fn get_offending_packet(&self) -> Bytes;
-}
-
 macro_rules! impl_conversion_and_type {
     (
         $name:ident : $message_type:ident
@@ -281,7 +491,7 @@ macro_rules! impl_conversion_and_type {
 
         impl From<$name> for ScmpMessage {
             fn from(value: $name) -> Self {
-                ScmpMessage::$message_type(value)
+                Self::$message_type(value)
             }
         }
 
@@ -359,12 +569,17 @@ macro_rules! error_message {
                     checksum: 0,
                 }
             }
+
+            /// Get the (truncated) packet that triggered the error.
+            #[inline]
+            pub fn get_offending_packet(&self) -> Bytes {
+                self.offending_packet.clone()
+            }
         }
 
-        impl ScmpErrorMessage for $name {
-            #[inline]
-            fn get_offending_packet(&self) -> Bytes {
-                self.offending_packet.clone()
+        impl From<$name> for ScmpErrorMessage {
+            fn from(value: $name) -> Self {
+                Self::$message_type(value)
             }
         }
 
@@ -634,26 +849,6 @@ impl ScmpMessageEncodeDecode for ScmpInternalConnectivityDown {
     }
 }
 
-/// Trait implemented by all SCMP informational messages.
-pub trait ScmpInformationalMessage: ScmpMessageBase + MessageChecksum {
-    /// Get the message's identifier.
-    fn get_identifier(&self) -> u16;
-    /// Get the message's sequence number.
-    fn get_sequence_number(&self) -> u16;
-
-    /// Get the combination of the message's identifier and sequence number.
-    ///
-    /// This can be used to match reply messages to their corresponding requests.
-    fn get_message_id(&self) -> u32 {
-        (self.get_identifier() as u32) << 16 | self.get_sequence_number() as u32
-    }
-
-    /// Encodes the identifier and sequence number to the provided buffer.
-    fn encode_message_id_unchecked(&self, buffer: &mut impl BufMut) {
-        buffer.put_u32(self.get_message_id());
-    }
-}
-
 macro_rules! informational_message {
     (
         $(#[$outer:meta])*
@@ -680,18 +875,42 @@ macro_rules! informational_message {
                     checksum: 0,
                 }
             }
-        }
 
-        impl ScmpInformationalMessage for $name {
+            /// Get the message's identifier.
             #[inline]
-            fn get_identifier(&self) -> u16 {
+            pub fn get_identifier(&self) -> u16 {
                 self.identifier
             }
 
+            /// Get the message's sequence number.
             #[inline]
-            fn get_sequence_number(&self) -> u16 {
+            pub fn get_sequence_number(&self) -> u16 {
                 self.sequence_number
             }
+
+
+            /// Get the combination of the message's identifier and sequence number.
+            ///
+            /// This can be used to match reply messages to their corresponding requests.
+            #[inline]
+            pub fn get_message_id(&self) -> u32 {
+                (self.get_identifier() as u32) << 16 | self.get_sequence_number() as u32
+            }
+
+            /// Encodes the identifier and sequence number to the provided buffer.
+            #[inline]
+            pub fn encode_message_id_unchecked(&self, buffer: &mut impl BufMut) {
+                buffer.put_u32(self.get_message_id());
+            }
+        }
+
+        impl From<$name> for ScmpInformationalMessage {
+            fn from(value: $name) -> Self {
+                Self::$message_type(value)
+            }
+        }
+
+        impl $name {
         }
 
         impl_conversion_and_type!($name: $message_type);
@@ -914,7 +1133,7 @@ mod tests {
 
     macro_rules! test_scmp_message {
         (
-            $name:ident, $variant:ident, $type:ty {$($new_param:expr,)*}
+            $name:ident, $variant:ident, $message_type:ty, $type:ty {$($new_param:expr,)*}
         ) => {
             mod $name {
                 use bytes::BytesMut;
@@ -924,6 +1143,8 @@ mod tests {
 
                 #[test]
                 fn convert_encode_decode() -> Result<(), Box<dyn std::error::Error>> {
+                    type ScmpSpecificMessage = $message_type;
+
                     let mut buffer = BytesMut::new();
                     let mut input = <$type>::new($($new_param,)*);
                     let address_header = AddressHeader::from(ByEndpoint::<ScionAddr> {
@@ -934,9 +1155,15 @@ mod tests {
                     input.set_checksum(&address_header);
                     assert!(input.verify_checksum(&address_header));
 
-                    let message = ScmpMessage::from(input);
+                    let message = ScmpMessage::from(input.clone());
                     match message {
                         ScmpMessage::$variant(..) => (),
+                        _ => panic!("wrong ScmpMessage variant"),
+                    }
+
+                    let specific_message = ScmpSpecificMessage::from(input);
+                    match specific_message {
+                        ScmpSpecificMessage::$variant(..) => (),
                         _ => panic!("wrong ScmpMessage variant"),
                     }
 
@@ -962,6 +1189,7 @@ mod tests {
     test_scmp_message!(
         destination_unreachable,
         DestinationUnreachable,
+        ScmpErrorMessage,
         ScmpDestinationUnreachable {
             DestinationUnreachableCode::AddressUnreachable,
             OFFENDING_PACKET.clone(),
@@ -971,6 +1199,7 @@ mod tests {
     test_scmp_message!(
         packet_too_big,
         PacketTooBig,
+        ScmpErrorMessage,
         ScmpPacketTooBig {
             42,
             OFFENDING_PACKET.clone(),
@@ -980,6 +1209,7 @@ mod tests {
     test_scmp_message!(
         parameter_problem,
         ParameterProblem,
+        ScmpErrorMessage,
         ScmpParameterProblem {
             ParameterProblemCode::InvalidExtensionHeader,
             42,
@@ -990,6 +1220,7 @@ mod tests {
     test_scmp_message!(
         external_interface_down,
         ExternalInterfaceDown,
+        ScmpErrorMessage,
         ScmpExternalInterfaceDown {
             "1-ff00:0:1".parse()?,
             42,
@@ -1000,6 +1231,7 @@ mod tests {
     test_scmp_message!(
         internal_connectivity_down,
         InternalConnectivityDown,
+        ScmpErrorMessage,
         ScmpInternalConnectivityDown {
             "1-ff00:0:1".parse()?,
             42,
@@ -1011,6 +1243,7 @@ mod tests {
     test_scmp_message!(
         echo_request,
         EchoRequest,
+        ScmpInformationalMessage,
         ScmpEchoRequest {
             42,
             314,
@@ -1021,6 +1254,7 @@ mod tests {
     test_scmp_message!(
         echo_reply,
         EchoReply,
+        ScmpInformationalMessage,
         ScmpEchoReply {
             42,
             314,
@@ -1031,6 +1265,7 @@ mod tests {
     test_scmp_message!(
         traceroute_request,
         TracerouteRequest,
+        ScmpInformationalMessage,
         ScmpTracerouteRequest {
             42,
             314,
@@ -1040,6 +1275,7 @@ mod tests {
     test_scmp_message!(
         traceroute_reply,
         TracerouteReply,
+        ScmpInformationalMessage,
         ScmpTracerouteReply {
             42,
             314,
