@@ -10,7 +10,7 @@ repos:
   - id: editorconfig-checker
     alias: ec
 - repo: https://github.com/crate-ci/typos
-  rev: v1.17.2
+  rev: typos-v0.10.21
   hooks:
   - id: typos
     pass_filenames: false
