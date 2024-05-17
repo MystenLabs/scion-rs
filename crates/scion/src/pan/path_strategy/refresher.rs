@@ -341,9 +341,7 @@ impl<'a> Iterator for PathsTo<'a> {
     type Item = &'a Path;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let Some(paths) = self.paths else {
-            return None;
-        };
+        let paths = self.paths?;
 
         #[allow(clippy::while_let_on_iterator)]
         while let Some(info) = self.inner.next() {

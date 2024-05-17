@@ -118,27 +118,34 @@ impl ChecksumDigest {
     ///
     /// If the slice is not a multiple of 2-bytes, then it is zero-padded
     /// before being added to the checksum.
-    pub fn add_slice(&mut self, data: &[u8]) -> &mut Self {
+    pub fn add_slice(&mut self, mut data: &[u8]) -> &mut Self {
         if data.is_empty() {
             return self;
         }
+        let mut initial_sum = 0;
 
-        // Converting to a &[u16] requires an even number of elements in the slice
-        let (data, initial_sum) = if data.len() % 2 == 0 {
-            (data, 0u32)
-        } else {
-            (
-                &data[..data.len() - 1],
-                // We want to zero pad the value, i.e., for slice where we pair the elements,
-                // we have [A, B], [C, D], ... [X, 0]. Since all the values are currently in
-                // memory in the order [A, B] storing [0, X] on a little endian architecture
-                // gets written as [X, 0] to memory. On big-endian this would get written as
-                // [0, X] so we swap it only on that big-endian architectures with to_le()
-                (data[data.len() - 1] as u16).to_le() as u32,
-            )
+        // Before converting to a `&[u16]` we need to make sure the slice is aligned.
+        let is_aligned = data.as_ptr().align_offset(2) == 0;
+        if !is_aligned {
+            // We want to zero-prepend the value, i.e., for slice where we pair the elements, we
+            // have [0, A], [B, C], ... Storing [0, X] on a little endian architecture gets written
+            // as [X, 0] to memory, so we need to swap it with `to_be()`.
+            initial_sum = (data[0] as u16).to_be() as u32;
+            data = &data[1..];
+        };
+        let ptr: *const u8 = data.as_ptr();
+
+        // Converting to a `&[u16]` requires an even number of elements in the slice.
+        if data.len() % 2 != 0 {
+            // We want to zero pad the value, i.e., for slice where we pair the elements,
+            // we have [A, B], [C, D], ... [X, 0]. Since all the values are currently in
+            // memory in the order [A, B] storing [0, X] on a little endian architecture
+            // gets written as [X, 0] to memory. On big-endian this would get written as
+            // [0, X] so we swap it only on that big-endian architectures with to_le().
+            initial_sum += (data[data.len() - 1] as u16).to_le() as u32;
+            data = &data[..data.len() - 1];
         };
 
-        let ptr: *const u8 = data.as_ptr();
         let data_u16 = unsafe { slice::from_raw_parts(ptr as *const u16, data.len() / 2) };
 
         let sum_with_overflow = data_u16
@@ -146,7 +153,13 @@ impl ChecksumDigest {
             .fold(initial_sum, |sum, value| sum + (*value as u32));
 
         // Already incorporate the overflow, as it simplifies the endian conversion below
-        let sum = Self::fold_checksum(sum_with_overflow) as u16;
+        let mut sum = Self::fold_checksum(sum_with_overflow) as u16;
+
+        // If the original slice was not aligned, we need to swap the bytes to get the correct
+        // checksum.
+        if !is_aligned {
+            sum = sum.swap_bytes();
+        }
 
         // The above sum is actually in big-endian but stored in big/little endian depending
         // on the platform. If the platform is little endian, this call will swap the byte-order
