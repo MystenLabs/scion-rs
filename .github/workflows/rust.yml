@@ -100,6 +100,8 @@ jobs:
       - run: cargo install cargo-tarpaulin@0.27.1
       - name: Install SCION and run local topology
         uses: "./.github/actions/setup-scion"
+        with:
+          scion-ref: v0.11.0
         id: scion
 
       - name: Run tests (including integration tests) and record coverage
