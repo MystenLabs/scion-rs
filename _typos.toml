@@ -1,2 +1,5 @@
 [files]
 extend-exclude = ["crates/scion/src/test_data"]
+
+[default.extend-words]
+snet = "snet"
