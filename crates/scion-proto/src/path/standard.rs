@@ -126,9 +126,7 @@ where
     ///
     /// There are always at most 3 segments.
     pub fn segment(&self, segment_index: usize) -> Option<Segment> {
-        let Some(info_field) = self.info_field(segment_index) else {
-            return None;
-        };
+        let info_field = self.info_field(segment_index)?;
 
         // Get the index of the first hop field in the segment.
         // This is equivalent to the index after all preceding hop fields.
