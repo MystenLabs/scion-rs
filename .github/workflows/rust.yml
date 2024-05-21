@@ -58,7 +58,7 @@ jobs:
               - 'crates/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
-              - 'rust-toolchain'
+              - 'rust-toolchain.toml'
               - '.github/workflows/rust.yml'
 
   dependencies:
