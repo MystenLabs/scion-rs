@@ -427,11 +427,14 @@ mod tests {
     }
 
     macro_rules! async_test_case {
-        ($name:ident: $func:ident($($arg:expr),*)) => {
+        ($name:ident($timeout:expr): $func:ident($($arg:expr),*)) => {
             #[tokio::test]
             async fn $name() -> TestResult {
-                $func($($arg,)*).await
+                tokio::time::timeout(std::time::Duration::from_secs($timeout),$func($($arg,)*)).await.unwrap()
             }
+        };
+        ($name:ident: $($tail:tt)*) => {
+            async_test_case!($name(1): $($tail)*);
         };
     }
 
