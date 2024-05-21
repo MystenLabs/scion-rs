@@ -265,6 +265,24 @@ mod tests {
         assert_eq!(checksum, !0xddf2);
     }
 
+    #[test]
+    fn rfc1071_example_slice_unaligned() {
+        // Construct a slice that is not 2B aligned.
+        let mut data = b"\0\0\x01\xf2\x03\xf4\xf5\xf6\xf7".to_vec();
+        let slice = if data.as_ptr().align_offset(2) == 0 {
+            &data[1..]
+        } else {
+            data.rotate_left(1);
+            &data[..data.len() - 1]
+        };
+
+        assert_eq!(slice.as_ptr().align_offset(2), 1);
+        assert_eq!(
+            ChecksumDigest::default().add_slice(slice).checksum(),
+            !0xddf2
+        );
+    }
+
     macro_rules! test_checksum {
         (
             name: $name:ident,
