@@ -19,7 +19,7 @@ jobs:
       - name: Check commit messages
         uses: aevea/commitsar@v0.20.2
       - name: Check PR title
-        uses: amannn/action-semantic-pull-request@v5.5.2
+        uses: amannn/action-semantic-pull-request@v5.5.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -36,7 +36,7 @@ jobs:
     name: Check spelling
     steps:
       - uses: actions/checkout@v4
-      - uses: crate-ci/typos@v1.21.0
+      - uses: crate-ci/typos@v1.22.9
 
   check-all:
     name: Check if all lint jobs succeeded
