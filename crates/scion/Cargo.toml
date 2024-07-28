@@ -18,7 +18,7 @@ tonic = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-mockall = "0.12.1"
+mockall = "0.13.0"
 tokio = { version = "1.35.1", features = ["rt-multi-thread", "macros", "test-util"] }
 tracing-subscriber = "0.3.18"
 
