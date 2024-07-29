@@ -9,14 +9,14 @@ members = [
 ]
 
 [workspace.dependencies]
-bytes = "1.5.0"
-chrono = { version = "0.4.33", default-features = false }
-prost = "0.12"
-prost-types = "0.12"
+bytes = "1.6.1"
+chrono = { version = "0.4.38", default-features = false }
+prost = "0.13"
+prost-types = "0.13"
 scion-grpc = { version = "0.1.0", path = "crates/scion-grpc" }
-thiserror = "1.0.56"
-tonic = "0.11"
-tonic-build = "0.11"
+thiserror = "1.0.63"
+tonic = "0.12"
+tonic-build = "0.12"
 tracing = "0.1.40"
 
 [workspace.lints.rust]
