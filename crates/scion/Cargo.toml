@@ -6,20 +6,20 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-async-trait = "0.1.77"
-bytes = "1.5.0"
+async-trait = "0.1.81"
+bytes = "1.6.1"
 chrono = { workspace = true, features = ["clock"] }
 futures = "0.3.30"
 scion-grpc = { version = "0.1.0", path = "../scion-grpc" }
 scion-proto = { version = "0.1.0", path = "../scion-proto" }
 thiserror = { workspace = true }
-tokio = { version = "1.35.1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.39.2", features = ["rt-multi-thread", "macros"] }
 tonic = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-mockall = "0.12.1"
-tokio = { version = "1.35.1", features = ["rt-multi-thread", "macros", "test-util"] }
+mockall = "0.13.0"
+tokio = { version = "1.39.2", features = ["rt-multi-thread", "macros", "test-util"] }
 tracing-subscriber = "0.3.18"
 
 [lints]

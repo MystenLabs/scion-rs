@@ -2,17 +2,15 @@
 # More documentation for the advisories section can be found here:
 # https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
 [advisories]
-vulnerability = "deny"
-unmaintained = "deny"
-notice = "deny"
-unsound = "deny"
+version = 2
+ignore = [
+]
 
 # This section is considered when running `cargo deny check licenses`
 # More documentation for the licenses section can be found here:
 # https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
 [licenses]
-# The lint level for crates which do not have a detectable license
-unlicensed = "deny"
+version = 2
 # List of explicitly allowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses
 # [possible values: any SPDX 3.11 short identifier (+ optional exception)].
@@ -21,20 +19,11 @@ allow = [
     "BSD-3-Clause",
     "MIT",
 ]
-# Lint level for licenses considered copyleft
-copyleft = "deny"
-# Blanket approval or denial for OSI-approved or FSF Free/Libre licenses
-allow-osi-fsf-free = "neither"
-# Lint level used when no other predicates are matched
-# 1. License isn't in the allow or deny lists
-# 2. License isn't copyleft
-# 3. License isn't OSI/FSF, or allow-osi-fsf-free = "neither"
-default = "deny"
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the
 # canonical license text of a valid SPDX license file.
 # [possible values: any between 0.0 and 1.0].
-confidence-threshold = 0.9
+confidence-threshold = 0.8
 # Allow 1 or more licenses on a per-crate basis, so that particular licenses
 # aren't accepted for every possible crate as with the normal allow list
 exceptions = [
@@ -61,13 +50,9 @@ skip = [
     { name = "hashbrown", version = "=0.12.3" },
     # h2 + tower use an old version
     { name = "indexmap", version = "=1.9.3" },
-    # hyper uses an old version
-    { name = "socket2", version = "^0.4.9" },
-    # axum + redox_syscall use an old version
-    { name = "bitflags", version = "=1.3.2" },
+    # axum-core uses an old version
+    { name = "sync_wrapper", version = "=0.1.2" },
 ]
-# Several crates depend on an older version of windows-sys
-skip-tree = [{ name = "windows-sys", depth = 3, version = "0.48"}]
 
 # This section is considered when running `cargo deny check sources`.
 # More documentation about the 'sources' section can be found here:
@@ -83,7 +68,4 @@ unknown-git = "deny"
 [sources.allow-org]
 # 1 or more github.com organizations to allow git sources for
 github = [
-    # "MystenLabs",
-    # "sui",
-    # "scionproto"
 ]
