@@ -53,6 +53,8 @@ skip = [
     # axum-core uses an old version
     { name = "sync_wrapper", version = "=0.1.2" },
 ]
+# Several crates depend on an older version of windows-sys
+skip-tree = [{ name = "windows-sys", depth = 3 }]
 
 # This section is considered when running `cargo deny check sources`.
 # More documentation about the 'sources' section can be found here:
