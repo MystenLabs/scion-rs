@@ -14,7 +14,7 @@ chrono = { version = "0.4.38", default-features = false }
 prost = "0.13"
 prost-types = "0.13"
 scion-grpc = { version = "0.1.0", path = "crates/scion-grpc" }
-thiserror = "1.0.63"
+thiserror = "2.0.2"
 tonic = "0.12"
 tonic-build = "0.12"
 tracing = "0.1.40"
