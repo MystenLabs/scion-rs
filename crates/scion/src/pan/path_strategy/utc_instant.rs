@@ -68,9 +68,6 @@ mod test {
     #[test]
     fn addition_with_max_chrono_duration_saturates_datetime() {
         let datetime = DateTime::<Utc>::MIN_UTC;
-        assert_eq!(
-            datetime.checked_add_signed(ChronoDuration::max_value()),
-            None
-        );
+        assert_eq!(datetime.checked_add_signed(ChronoDuration::MAX), None);
     }
 }
