@@ -1,3 +1,5 @@
+//! Tests for the dispatcher.
+
 use scion::dispatcher::{get_dispatcher_path, DispatcherStream, RegistrationError};
 use scion_proto::address::SocketAddr;
 

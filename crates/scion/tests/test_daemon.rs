@@ -1,3 +1,5 @@
+//! Tests for the connection with the SCION Daemon.
+
 use std::{env, str::FromStr};
 
 use scion::daemon::{get_daemon_address, DaemonClient};

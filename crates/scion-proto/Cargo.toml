@@ -9,7 +9,7 @@ publish = false
 bytes = { workspace = true }
 chrono = { workspace = true }
 scion-grpc = { workspace = true }
-serde = { version = "1.0.204", features = ["derive"] }
+serde = { version = "1.0.217", features = ["derive"] }
 sha2 = "0.10.8"
 thiserror = { workspace = true }
 tracing = { workspace = true }
@@ -17,8 +17,8 @@ tracing = { workspace = true }
 [dev-dependencies]
 criterion = "0.5.1"
 prost-types = { workspace = true }
-rand = "0.8.5"
-rand_xorshift = "0.3.0"
+rand = "0.9.0"
+rand_xorshift = "0.4.0"
 test-utils = { version = "0.1.0", path = "../test-utils" }
 
 [[bench]]

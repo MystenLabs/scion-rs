@@ -11,4 +11,4 @@ publish = false
 workspace = true
 
 [dev-dependencies]
-tokio = { version = "1.39.2", features = ["test-util", "tokio-macros", "macros"] }
+tokio = { version = "1.43.0", features = ["test-util", "tokio-macros", "macros"] }

@@ -167,7 +167,8 @@ impl PathRefresher {
 }
 
 impl PathStrategy for PathRefresher {
-    type PathsTo<'p> = PathsTo<'p>
+    type PathsTo<'p>
+        = PathsTo<'p>
     where
         Self: 'p;
 

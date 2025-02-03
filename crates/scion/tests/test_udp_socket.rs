@@ -1,3 +1,5 @@
+//! Tests for the UDP socket.
+
 use std::{sync::OnceLock, time::Duration};
 
 use bytes::Bytes;

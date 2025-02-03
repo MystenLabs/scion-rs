@@ -165,7 +165,7 @@ struct AsyncPathStrategyInner<S, P> {
     waker: Notify,
 }
 
-impl<'p, S, P> AsyncPathStrategyInner<S, P>
+impl<S, P> AsyncPathStrategyInner<S, P>
 where
     S: PathStrategy + Send,
     P: AsyncPathService + Send + Sync,

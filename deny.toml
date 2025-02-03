@@ -18,6 +18,7 @@ allow = [
     "Apache-2.0",
     "BSD-3-Clause",
     "MIT",
+    "Unicode-3.0",
 ]
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the
@@ -27,9 +28,6 @@ confidence-threshold = 0.8
 # Allow 1 or more licenses on a per-crate basis, so that particular licenses
 # aren't accepted for every possible crate as with the normal allow list
 exceptions = [
-    { allow = [
-        "Unicode-DFS-2016",
-    ], name = "unicode-ident" },
 ]
 
 [licenses.private]
@@ -50,11 +48,13 @@ skip = [
     { name = "hashbrown", version = "=0.12.3" },
     # h2 + tower use an old version
     { name = "indexmap", version = "=1.9.3" },
-    # axum-core uses an old version
-    { name = "sync_wrapper", version = "=0.1.2" },
 ]
 # Several crates depend on an older version of windows-sys
-skip-tree = [{ name = "windows-sys", depth = 3 }]
+skip-tree = [
+    { name = "windows-sys", depth = 3 },
+    # the latest version of tonic is 0.12.3, which indirectly depends on old versions
+    { name = "tonic", depth = 3 },
+]
 
 # This section is considered when running `cargo deny check sources`.
 # More documentation about the 'sources' section can be found here:
