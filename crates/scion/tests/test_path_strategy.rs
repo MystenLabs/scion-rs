@@ -1,3 +1,5 @@
+//! Tests for the path strategy.
+
 use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;

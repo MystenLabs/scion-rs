@@ -76,7 +76,8 @@ impl<T> PathStrategy for UniformStrategy<T>
 where
     T: PathStrategy,
 {
-    type PathsTo<'p> = T::PathsTo<'p>
+    type PathsTo<'p>
+        = T::PathsTo<'p>
     where
         Self: 'p;
 

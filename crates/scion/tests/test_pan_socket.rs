@@ -1,3 +1,5 @@
+//! Tests for the path-aware-networking (PAN) socket.
+
 use std::{sync::OnceLock, time::Duration};
 
 use bytes::Bytes;

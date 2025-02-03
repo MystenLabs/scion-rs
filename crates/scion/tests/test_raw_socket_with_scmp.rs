@@ -1,3 +1,5 @@
+//! Tests for the raw socket with SCMP.
+
 use std::time::Duration;
 
 use scion::{
