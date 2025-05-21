@@ -15,8 +15,8 @@ prost = "0.13"
 prost-types = "0.13"
 scion-grpc = { version = "0.1.0", path = "crates/scion-grpc" }
 thiserror = "1.0.69"
-tonic = "0.12"
-tonic-build = "0.12"
+tonic = "0.13"
+tonic-build = "0.13"
 tracing = "0.1.41"
 
 [workspace.lints.rust]
