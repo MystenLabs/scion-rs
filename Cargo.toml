@@ -11,8 +11,8 @@ members = [
 [workspace.dependencies]
 bytes = "1.9.0"
 chrono = { version = "0.4.39", default-features = false }
-prost = "0.13"
-prost-types = "0.13"
+prost = "0.14"
+prost-types = "0.14"
 scion-grpc = { version = "0.1.0", path = "crates/scion-grpc" }
 thiserror = "1.0.69"
 tonic = "0.13"
