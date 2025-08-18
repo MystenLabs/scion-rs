@@ -364,8 +364,11 @@ mod tests {
     use crate::pan::path_strategy::{
         Request,
         test_utils::{
-            assert_paths_unordered_eq, get_paths_with_expiry_time_before,
-            get_paths_with_hops_and_expiry, get_unexpired_paths, make_test_path, param_test,
+            assert_paths_unordered_eq,
+            get_paths_with_expiry_time_before,
+            get_paths_with_hops_and_expiry,
+            get_unexpired_paths,
+            param_test,
         },
         utc_instant::UtcInstant,
     };
