@@ -7,16 +7,16 @@ use std::{
 use futures::stream::{FuturesUnordered, StreamExt};
 use scion_proto::{address::IsdAsn, path::Path};
 use tokio::{
-    sync::{watch, Notify},
+    sync::{Notify, watch},
     task::JoinHandle,
     time::Instant,
 };
 
 use super::PathStrategy;
 use crate::pan::{
+    AsyncPathService,
     path_service::PathLookupError,
     path_strategy::{PathFetchError, Request},
-    AsyncPathService,
 };
 
 /// An asynchronous wrapper around a [`PathStrategy`].
@@ -338,7 +338,7 @@ mod tests {
     use scion_proto::{address::IsdAsn, packet::ByEndpoint};
 
     use super::*;
-    use crate::pan::{path_strategy::PathStrategy, AsyncPathService};
+    use crate::pan::{AsyncPathService, path_strategy::PathStrategy};
 
     /// An arbitrary, non-wildcard IsdAsn.
     const REMOTE_IA: IsdAsn = IsdAsn(0x1_ff00_0000_0001);
@@ -381,9 +381,9 @@ mod tests {
 
         use super::*;
         use crate::pan::{
+            AsyncPathService,
             path_service::PathLookupError,
             path_strategy::{PathFetchError, PathStrategy, Request},
-            AsyncPathService,
         };
 
         #[inline]
@@ -849,11 +849,11 @@ mod tests {
         strategy.expect_path_to().returning(move |ia, _| {
             let maybe_path = path_to_path.lock().unwrap();
 
-            if let Some(path) = maybe_path.as_ref() {
-                if path.isd_asn.destination == ia {
-                    let path = Box::new(path.clone());
-                    return Ok(Some(Box::leak(path)));
-                }
+            if let Some(path) = maybe_path.as_ref()
+                && path.isd_asn.destination == ia
+            {
+                let path = Box::new(path.clone());
+                return Ok(Some(Box::leak(path)));
             }
 
             Ok(None)

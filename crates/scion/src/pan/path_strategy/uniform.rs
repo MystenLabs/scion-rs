@@ -3,7 +3,7 @@
 use std::{
     cell::RefCell,
     cmp,
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     time::{Duration, Instant},
 };
 

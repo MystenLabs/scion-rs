@@ -409,10 +409,12 @@ mod tests {
 
         #[test]
         fn incorrect_length_with_method() {
-            assert!(some_if_length_matches!(
-                (vec![0; 2], 1) => into_iter()
-            )
-            .is_none());
+            assert!(
+                some_if_length_matches!(
+                    (vec![0; 2], 1) => into_iter()
+                )
+                .is_none()
+            );
         }
     }
 }

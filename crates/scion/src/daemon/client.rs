@@ -8,8 +8,8 @@ use tonic::transport::Channel;
 use tracing::warn;
 
 use super::{
-    messages::{self, PathRequest},
     AsInfo,
+    messages::{self, PathRequest},
 };
 use crate::pan::{AsyncPathService, PathLookupError};
 

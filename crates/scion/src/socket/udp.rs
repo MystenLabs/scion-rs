@@ -14,14 +14,14 @@ use scion_proto::{
     packet::{ByEndpoint, MessageChecksum, ScionPacketRaw, ScionPacketUdp},
     path::{DataplanePath, Path},
     reliable::Packet,
-    scmp::{ScmpDecodeError, ScmpErrorMessage, SCMP_PROTOCOL_NUMBER},
+    scmp::{SCMP_PROTOCOL_NUMBER, ScmpDecodeError, ScmpErrorMessage},
     wire_encoding::WireDecode,
 };
 use tokio::sync::Mutex;
 
-use super::{error::log_err, utils::check_buffers, BindError};
+use super::{BindError, error::log_err, utils::check_buffers};
 use crate::{
-    dispatcher::{self, get_dispatcher_path, DispatcherStream},
+    dispatcher::{self, DispatcherStream, get_dispatcher_path},
     pan::{AsyncScionDatagram, PathErrorKind, ReceiveError, SendError},
 };
 
@@ -191,10 +191,10 @@ impl UdpSocketInner {
             return Err(io::ErrorKind::NotConnected.into());
         };
 
-        if let Some(metadata) = &path.metadata {
-            if metadata.expiration < Utc::now() {
-                return Err(PathErrorKind::Expired.into());
-            }
+        if let Some(metadata) = &path.metadata
+            && metadata.expiration < Utc::now()
+        {
+            return Err(PathErrorKind::Expired.into());
         }
 
         let relay = if path.underlay_next_hop.is_some() {
@@ -307,11 +307,11 @@ impl UdpSocketInner {
             return Err(InternalReceiveError::InvalidPacket);
         };
 
-        if let Some(remote_addr) = remote_addr {
-            if remote_addr != source {
-                tracing::debug!(%source, %remote_addr, "dropping packet not from connected remote");
-                return Err(InternalReceiveError::InvalidPacket);
-            }
+        if let Some(remote_addr) = remote_addr
+            && remote_addr != source
+        {
+            tracing::debug!(%source, %remote_addr, "dropping packet not from connected remote");
+            return Err(InternalReceiveError::InvalidPacket);
         }
 
         let payload_len = udp_datagram.payload.len();

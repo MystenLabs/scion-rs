@@ -80,15 +80,15 @@ impl AsyncPathService for Path<Bytes> {
     async fn path_to(&self, scion_as: IsdAsn) -> Result<Path, PathLookupError> {
         self.check_destination(scion_as)?;
 
-        if let Some(expiry_time) = self.expiry_time() {
-            if expiry_time <= Utc::now() {
-                tracing::warn!(
-                    destination=%scion_as,
-                    path=?self,
-                    "attempted to send packet with expired, static path"
-                );
-                return Err(PathLookupError::NoPath);
-            }
+        if let Some(expiry_time) = self.expiry_time()
+            && expiry_time <= Utc::now()
+        {
+            tracing::warn!(
+                destination=%scion_as,
+                path=?self,
+                "attempted to send packet with expired, static path"
+            );
+            return Err(PathLookupError::NoPath);
         }
         Ok(self.clone())
     }

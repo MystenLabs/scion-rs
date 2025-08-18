@@ -3,25 +3,25 @@
 use bytes::{Buf, Bytes};
 
 use super::{
-    error::ScmpEncodeError,
     FlowId,
     InadequateBufferSize,
     MessageChecksum,
     ScionHeaders,
     ScionPacket,
     ScionPacketRaw,
+    error::ScmpEncodeError,
 };
 use crate::{
     address::ScionAddr,
     packet::ByEndpoint,
     path::{DataplanePath, Path},
     scmp::{
+        SCMP_PROTOCOL_NUMBER,
         ScmpDecodeError,
         ScmpMessage,
         ScmpMessageBase,
         ScmpTracerouteRequest,
         ScmpType,
-        SCMP_PROTOCOL_NUMBER,
     },
     wire_encoding::{WireDecode, WireEncodeVec},
 };

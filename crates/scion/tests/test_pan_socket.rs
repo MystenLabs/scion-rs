@@ -4,7 +4,7 @@ use std::{sync::OnceLock, time::Duration};
 
 use bytes::Bytes;
 use scion::{
-    daemon::{get_daemon_address, DaemonClient},
+    daemon::{DaemonClient, get_daemon_address},
     pan::{AsyncScionDatagram, PathAwareDatagram},
     socket::UdpSocket,
 };
@@ -27,8 +27,8 @@ macro_rules! test_send_receive_reply {
                 LOCK.get_or_init(|| Mutex::default())
             }
 
-            async fn get_sockets(
-            ) -> TestResult<(PathAwareDatagram<UdpSocket, Path>, UdpSocket, Path)> {
+            async fn get_sockets()
+            -> TestResult<(PathAwareDatagram<UdpSocket, Path>, UdpSocket, Path)> {
                 let endpoints: ByEndpoint<SocketAddr> = ByEndpoint {
                     source: $source.parse().unwrap(),
                     destination: $destination.parse().unwrap(),

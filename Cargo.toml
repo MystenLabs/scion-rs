@@ -1,12 +1,16 @@
 [workspace]
-resolver = "2"
-
+resolver = "3"
 members = [
     "crates/scion",
     "crates/scion-grpc",
     "crates/scion-proto",
     "crates/test-utils"
 ]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+version = "0.1.0"
 
 [workspace.dependencies]
 async-trait = "0.1.89"

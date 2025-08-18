@@ -4,7 +4,7 @@ use std::{sync::OnceLock, time::Duration};
 
 use bytes::Bytes;
 use scion::{
-    daemon::{get_daemon_address, DaemonClient},
+    daemon::{DaemonClient, get_daemon_address},
     pan::AsyncScionDatagram,
     socket::UdpSocket,
 };

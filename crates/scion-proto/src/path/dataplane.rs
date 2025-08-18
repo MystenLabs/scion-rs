@@ -147,7 +147,7 @@ impl DataplanePath<Bytes> {
             Self::EmptyPath => (),
             Self::Standard(standard_path) => *standard_path = standard_path.to_reversed(),
             Self::Unsupported { path_type, .. } => {
-                return Err(UnsupportedPathType(u8::from(*path_type)))
+                return Err(UnsupportedPathType(u8::from(*path_type)));
             }
         }
         Ok(self)

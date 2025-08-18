@@ -13,7 +13,7 @@ use scion_proto::{
     path::{Path, PathFingerprint},
 };
 
-use super::{utc_instant::UtcInstant, PathFetchError, PathStrategy, Request};
+use super::{PathFetchError, PathStrategy, Request, utc_instant::UtcInstant};
 
 /// A [`PathStrategy`] that queries and refreshes paths.
 ///
@@ -362,6 +362,7 @@ mod tests {
 
     use super::*;
     use crate::pan::path_strategy::{
+        Request,
         test_utils::{
             assert_paths_unordered_eq,
             get_paths_with_expiry_time_before,
@@ -371,7 +372,6 @@ mod tests {
             param_test,
         },
         utc_instant::UtcInstant,
-        Request,
     };
 
     const REMOTE_IA: IsdAsn = IsdAsn(0x1_ff00_0000_0001);

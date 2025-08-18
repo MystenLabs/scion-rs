@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use super::{error::AddressKind, AddressParseError};
+use super::{AddressParseError, error::AddressKind};
 
 /// A 16-bit identifier of a SCION Isolation Domain.
 ///

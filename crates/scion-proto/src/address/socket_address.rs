@@ -2,7 +2,6 @@ use core::{fmt::Display, str::FromStr};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use super::{
-    error::AddressKind,
     AddressParseError,
     HostAddr,
     IsdAsn,
@@ -11,6 +10,7 @@ use super::{
     ScionAddrV4,
     ScionAddrV6,
     ServiceAddr,
+    error::AddressKind,
 };
 use crate::packet::AddressInfo;
 

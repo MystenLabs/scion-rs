@@ -1,0 +1,16 @@
+[default]
+out = ["Html", "Xml"]
+run-types = ["Bins", "Doctests", "Examples", "Lib", "Tests"]
+skip-clean = true
+# Use separate target directory to avoid interference with other builds.
+target-dir = "target/tarpaulin"
+# Increase timeout for longer-running tests to 5 minutes.
+timeout = "5min"
+# Don't include test and benchmark code in the coverage result.
+exclude-files = [
+    "crates/scion-grpc/*",
+    "crates/**/tests/*",
+    "crates/**/benches/*",
+]
+# Include all tests, even longer integration tests.
+args = ["--include-ignored"]
