@@ -3,12 +3,11 @@
 use bytes::{Buf, Bytes};
 
 use super::{
-    AddressHeader, 
-    
+    AddressHeader,
     ByEndpoint,
     CommonHeader,
     DecodeError,
-    EncodeError, 
+    EncodeError,
     FlowId,
     InadequateBufferSize,
     ScionHeaders,

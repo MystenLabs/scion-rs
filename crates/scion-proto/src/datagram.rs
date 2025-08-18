@@ -5,7 +5,6 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crate::{
     packet::{
         self,
-        
         AddressHeader,
         ByEndpoint,
         ChecksumDigest,

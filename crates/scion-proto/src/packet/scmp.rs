@@ -3,8 +3,7 @@
 use bytes::{Buf, Bytes};
 
 use super::{
-    FlowId, 
-    
+    FlowId,  
     InadequateBufferSize, 
     MessageChecksum, 
     ScionHeaders, 
@@ -17,8 +16,7 @@ use crate::{
     packet::ByEndpoint,
     path::{DataplanePath, Path},
     scmp::{
-        SCMP_PROTOCOL_NUMBER, 
-        
+        SCMP_PROTOCOL_NUMBER,
         ScmpDecodeError,
         ScmpMessage,
         ScmpMessageBase,
