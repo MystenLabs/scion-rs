@@ -3,11 +3,11 @@
 use bytes::{Buf, Bytes};
 
 use super::{
-    FlowId,  
-    InadequateBufferSize, 
-    MessageChecksum, 
-    ScionHeaders, 
-    ScionPacket, 
+    FlowId,
+    InadequateBufferSize,
+    MessageChecksum,
+    ScionHeaders,
+    ScionPacket,
     ScionPacketRaw,
     error::ScmpEncodeError,
 };

@@ -19,7 +19,7 @@ use bytes::BytesMut;
 use scion_proto::{
     address::SocketAddr,
     reliable::{
-        CommonHeader,    
+        CommonHeader,
         DecodeError,
         InvalidRegistrationAddressError,
         Packet,
