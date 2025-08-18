@@ -11,8 +11,15 @@ pub use error::{DecodeError, EncodeError, InadequateBufferSize, ScmpEncodeError}
 
 mod headers;
 pub use headers::{
-    AddressHeader, AddressInfo, ByEndpoint, CommonHeader, FlowId, RawHostAddress, ScionHeaders,
+    AddressHeader, 
+    AddressInfo, 
+    ByEndpoint, 
+    CommonHeader, 
+    FlowId, 
+    RawHostAddress, 
+    ScionHeaders,
     Version,
+    ScionPacketRaw,
 };
 
 mod raw;

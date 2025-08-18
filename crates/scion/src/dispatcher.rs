@@ -19,8 +19,14 @@ use bytes::BytesMut;
 use scion_proto::{
     address::SocketAddr,
     reliable::{
-        CommonHeader, DecodeError, InvalidRegistrationAddressError, Packet,
-        RegistrationError as ProtocolRegistrationError, RegistrationExchange, StreamParser,
+        CommonHeader, 
+        
+        DecodeError, 
+        InvalidRegistrationAddressError, 
+        Packet,
+        RegistrationError as ProtocolRegistrationError, 
+        RegistrationExchange, 
+        StreamParser,
     },
     wire_encoding::{WireEncode, WireEncodeVec},
 };
