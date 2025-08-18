@@ -5,13 +5,13 @@ use bytes::{Buf, Bytes};
 use super::{
     AddressHeader, 
     
-    ByEndpoint, 
-    CommonHeader, 
-    DecodeError, 
+    ByEndpoint,
+    CommonHeader,
+    DecodeError,
     EncodeError, 
     FlowId,
-    InadequateBufferSize, 
-    ScionHeaders, 
+    InadequateBufferSize,
+    ScionHeaders,
     ScionPacket,
     ScionPacketRaw,
 };

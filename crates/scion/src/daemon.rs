@@ -14,10 +14,10 @@ pub use messages::{AsInfo, PathRequest, PathRequestFlags};
 
 mod client;
 pub use client::{
-    DAEMON_ADDRESS_ENV_VARIABLE, 
+    DAEMON_ADDRESS_ENV_VARIABLE,
 
-    DEFAULT_DAEMON_ADDRESS, 
-    DaemonClient, 
+    DEFAULT_DAEMON_ADDRESS,
+    DaemonClient,
     DaemonClientError,
     get_daemon_address,
 };

@@ -18,11 +18,10 @@ pub use segment::{Segment, Segments};
 
 mod meta_header;
 pub use meta_header::{
-    HopFieldIndex, 
-    
-    InfoFieldIndex, 
-    PathMetaHeader, 
-    PathMetaReserved, 
+    HopFieldIndex,
+    InfoFieldIndex,
+    PathMetaHeader,
+    PathMetaReserved,
     SegmentLength,
 };
 

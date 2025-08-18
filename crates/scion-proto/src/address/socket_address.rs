@@ -2,15 +2,18 @@ use core::{fmt::Display, str::FromStr};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use super::{
-    AddressParseError, 
-    HostAddr, 
-    IsdAsn, 
-    ScionAddr, 
-    ScionAddrSvc, 
-    ScionAddrV4, 
+    AddressParseError,
+    HostAddr,
+    IsdAsn,
+    ScionAddr,
+    ScionAddrSvc,
+    ScionAddrV4,
     ScionAddrV6,
-    ServiceAddr, 
+    ServiceAddr,
     error::AddressKind,
+    SocketAddrSvc,
+    SocketAddrV4,
+    SocketAddrV6,
 };
 use crate::packet::AddressInfo;
 

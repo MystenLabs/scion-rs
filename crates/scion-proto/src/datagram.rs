@@ -7,10 +7,11 @@ use crate::{
         self,
         
         AddressHeader,
-        ByEndpoint, 
-        ChecksumDigest, 
-        InadequateBufferSize, 
+        ByEndpoint,
+        ChecksumDigest,
+        InadequateBufferSize,
         MessageChecksum,
+        UdpMessage,
     },
     wire_encoding::{WireDecode, WireEncodeVec},
 };

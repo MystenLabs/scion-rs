@@ -19,9 +19,9 @@ use crate::{
     scmp::{
         SCMP_PROTOCOL_NUMBER, 
         
-        ScmpDecodeError, 
-        ScmpMessage, 
-        ScmpMessageBase, 
+        ScmpDecodeError,
+        ScmpMessage,
+        ScmpMessageBase,
         ScmpTracerouteRequest,
         ScmpType,
     },
