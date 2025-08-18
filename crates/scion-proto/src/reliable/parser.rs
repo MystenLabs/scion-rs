@@ -110,7 +110,7 @@ mod tests {
         }
         assert!(packet.is_some());
 
-        let packet = packet.unwrap();
+        let packet = packet.expect("packet should be Some");
         assert_eq!(packet.last_host, Some(parse!("[2001:db8::1]:80")));
         assert_eq!(packet.content, Bytes::from_static(b"RUST"));
 

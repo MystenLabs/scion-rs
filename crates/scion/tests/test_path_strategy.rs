@@ -6,8 +6,7 @@ use bytes::Bytes;
 use scion::{
     daemon::{self, DaemonClient},
     pan::{
-        AsyncScionDatagram,
-        PathAwareDatagram,
+        AsyncScionDatagram, PathAwareDatagram,
         path_strategy::{AsyncPathStrategy, refresher::PathRefresher},
     },
     socket::UdpSocket,

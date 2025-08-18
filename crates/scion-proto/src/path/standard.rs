@@ -18,11 +18,7 @@ pub use segment::{Segment, Segments};
 
 mod meta_header;
 pub use meta_header::{
-    HopFieldIndex,
-    InfoFieldIndex,
-    PathMetaHeader,
-    PathMetaReserved,
-    SegmentLength,
+    HopFieldIndex, InfoFieldIndex, PathMetaHeader, PathMetaReserved, SegmentLength,
 };
 
 /// The standard SCION path header.

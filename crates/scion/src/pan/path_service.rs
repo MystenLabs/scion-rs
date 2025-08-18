@@ -16,6 +16,9 @@ pub enum PathLookupError {
     /// The destination can be queried, but there are no paths available to it.
     #[error("no path available to destination")]
     NoPath,
+    /// Failed to acquire lock on path strategy.
+    #[error("failed to acquire lock on path strategy")]
+    LockFailed,
     /// Other errors raised by the service.
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send>),

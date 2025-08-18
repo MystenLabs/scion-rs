@@ -3,15 +3,8 @@
 use bytes::{Buf, Bytes};
 
 use super::{
-    AddressHeader,
-    ByEndpoint,
-    CommonHeader,
-    DecodeError,
-    EncodeError,
-    FlowId,
-    InadequateBufferSize,
-    ScionHeaders,
-    ScionPacket,
+    AddressHeader, ByEndpoint, CommonHeader, DecodeError, EncodeError, FlowId,
+    InadequateBufferSize, ScionHeaders, ScionPacket,
 };
 use crate::{
     address::ScionAddr,

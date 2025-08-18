@@ -303,7 +303,8 @@ mod tests {
         )
         .expect("conversion should succeed");
         assert_eq!(
-            path.underlay_next_hop.unwrap(),
+            path.underlay_next_hop
+                .expect("underlay_next_hop should be Some"),
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 42)
         );
         assert_eq!(

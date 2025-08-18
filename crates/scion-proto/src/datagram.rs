@@ -4,12 +4,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use crate::{
     packet::{
-        self,
-        AddressHeader,
-        ByEndpoint,
-        ChecksumDigest,
-        InadequateBufferSize,
-        MessageChecksum,
+        self, AddressHeader, ByEndpoint, ChecksumDigest, InadequateBufferSize, MessageChecksum,
     },
     wire_encoding::{WireDecode, WireEncodeVec},
 };

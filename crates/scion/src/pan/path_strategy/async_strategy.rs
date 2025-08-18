@@ -85,7 +85,11 @@ where
             {
                 let now = Instant::now();
                 let rel_now = now.duration_since(start);
-                let strategy = self.inner.strategy.lock().unwrap();
+                let strategy = self
+                    .inner
+                    .strategy
+                    .lock()
+                    .map_err(|_| PathLookupError::LockFailed)?;
 
                 match strategy.is_path_available(scion_as, now.into()) {
                     Err(PathFetchError::UnsupportedDestination) => {
@@ -191,7 +195,10 @@ where
                 let _span =
                     tracing::debug_span!("request_check", now=?now.duration_since(start)).entered();
 
-                let mut strategy = self.strategy.lock().unwrap();
+                let mut strategy = self
+                    .strategy
+                    .lock()
+                    .map_err(|_| PathLookupError::LockFailed)?;
 
                 // Repeatedly polls requests from the underlying strategy.
                 //
@@ -244,7 +251,7 @@ where
                             }
                             (scion_as, Ok(paths)) => {
                                 let _guard = span.enter();
-                                let mut strategy = self.strategy.lock().unwrap();
+                                let mut strategy = self.strategy.lock().map_err(|_| PathLookupError::LockFailed)?;
 
                                 found_paths.clear();
                                 found_paths.extend(paths);
@@ -847,7 +854,7 @@ mod tests {
 
         let path_to_path = path_store.clone();
         strategy.expect_path_to().returning(move |ia, _| {
-            let maybe_path = path_to_path.lock().unwrap();
+            let maybe_path = path_to_path.lock().expect("failed to acquire lock");
 
             if let Some(path) = maybe_path.as_ref()
                 && path.isd_asn.destination == ia
@@ -861,7 +868,9 @@ mod tests {
 
         let is_path_available_path = path_store.clone();
         strategy.expect_is_path_available().returning(move |ia, _| {
-            let maybe_path = is_path_available_path.lock().unwrap();
+            let maybe_path = is_path_available_path
+                .lock()
+                .expect("failed to acquire lock");
 
             if let Some(path) = maybe_path.as_ref() {
                 Ok(path.isd_asn.destination == ia)
@@ -876,7 +885,7 @@ mod tests {
             .returning(move |paths, _| {
                 let _ = handle_lookup_paths_path
                     .lock()
-                    .unwrap()
+                    .expect("failed to acquire lock")
                     .insert(paths[0].clone());
             });
 

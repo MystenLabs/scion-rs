@@ -15,6 +15,17 @@ pub enum BindError {
     RegistrationFailed(#[from] RegistrationError),
 }
 
+/// Errors that may occur when accessing socket state.
+#[derive(Debug, thiserror::Error)]
+pub enum SocketStateError {
+    /// Failed to acquire read lock on socket state.
+    #[error("failed to acquire read lock on socket state")]
+    ReadLockFailed,
+    /// Failed to acquire write lock on socket state.
+    #[error("failed to acquire write lock on socket state")]
+    WriteLockFailed,
+}
+
 impl From<UdpEncodeError> for SendError {
     fn from(value: UdpEncodeError) -> Self {
         match value {

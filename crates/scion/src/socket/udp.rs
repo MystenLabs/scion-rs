@@ -1,8 +1,7 @@
 //! A socket to send UDP datagrams via SCION.
 
 use std::{
-    cmp,
-    io,
+    cmp, io,
     sync::{Arc, RwLock},
 };
 
@@ -19,7 +18,11 @@ use scion_proto::{
 };
 use tokio::sync::Mutex;
 
-use super::{BindError, error::log_err, utils::check_buffers};
+use super::{
+    BindError,
+    error::{SocketStateError, log_err},
+    utils::check_buffers,
+};
 use crate::{
     dispatcher::{self, DispatcherStream, get_dispatcher_path},
     pan::{AsyncScionDatagram, PathErrorKind, ReceiveError, SendError},
@@ -186,7 +189,11 @@ impl UdpSocketInner {
         destination: Option<SocketAddr>,
         path: &Path,
     ) -> Result<(), SendError> {
-        let state = self.state.read().unwrap().clone();
+        let state = self
+            .state
+            .read()
+            .map_err(|_| SocketStateError::ReadLockFailed)?
+            .clone();
         let Some(destination) = destination.or(state.remote_address) else {
             return Err(io::ErrorKind::NotConnected.into());
         };
@@ -234,7 +241,11 @@ impl UdpSocketInner {
 
         // Keep a copy of the connection's remote_addr locally, so that the user connecting to a
         // different destination does not affect what this call should return.
-        let remote_addr = self.state.read().unwrap().remote_address;
+        let remote_addr = self
+            .state
+            .read()
+            .map_err(|_| SocketStateError::ReadLockFailed)?
+            .remote_address;
 
         loop {
             // Keep the lock until we no longer have a dependency on the internal buffers.
@@ -329,16 +340,34 @@ impl UdpSocketInner {
         ))
     }
 
-    pub fn local_addr(&self) -> SocketAddr {
-        self.state.read().unwrap().local_address
+    pub fn local_addr(&self) -> Result<SocketAddr, SocketStateError> {
+        Ok(self
+            .state
+            .read()
+            .map_err(|_| SocketStateError::ReadLockFailed)?
+            .local_address)
     }
 
-    pub fn remote_addr(&self) -> Option<SocketAddr> {
-        self.state.read().unwrap().remote_address
+    pub fn remote_addr(&self) -> Result<Option<SocketAddr>, SocketStateError> {
+        Ok(self
+            .state
+            .read()
+            .map_err(|_| SocketStateError::ReadLockFailed)?
+            .remote_address)
     }
 
-    pub fn set_remote_address(&self, remote_address: Option<SocketAddr>) {
-        Arc::make_mut(&mut *self.state.write().unwrap()).remote_address = remote_address;
+    pub fn set_remote_address(
+        &self,
+        remote_address: Option<SocketAddr>,
+    ) -> Result<(), SocketStateError> {
+        Arc::make_mut(
+            &mut *self
+                .state
+                .write()
+                .map_err(|_| SocketStateError::WriteLockFailed)?,
+        )
+        .remote_address = remote_address;
+        Ok(())
     }
 }
 

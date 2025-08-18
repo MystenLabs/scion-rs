@@ -5,7 +5,7 @@ use scion_proto::{
     scmp::ScmpErrorMessage,
 };
 
-use crate::dispatcher;
+use crate::{dispatcher, socket::error::SocketStateError};
 
 /// Kinds of path-related failures that may occur when sending a packet.
 #[derive(Debug)]
@@ -43,6 +43,9 @@ pub enum SendError {
     /// The packet is too large to be sent on the network.
     #[error("packet is too large to be sent")]
     PacketTooLarge,
+    /// Failed to access socket state.
+    #[error("failed to access socket state")]
+    SocketStateError,
 }
 
 impl From<PathErrorKind> for SendError {
@@ -74,6 +77,18 @@ impl From<packet::EncodeError> for SendError {
     }
 }
 
+impl From<SocketStateError> for ReceiveError {
+    fn from(_value: SocketStateError) -> Self {
+        ReceiveError::SocketStateError
+    }
+}
+
+impl From<SocketStateError> for SendError {
+    fn from(_value: SocketStateError) -> Self {
+        SendError::SocketStateError
+    }
+}
+
 /// Error messages returned from the UDP socket.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ReceiveError {
@@ -88,4 +103,7 @@ pub enum ReceiveError {
     /// An SCMP error message was received.
     #[error("an SCMP error message was received: {0}")]
     ScmpError(ScmpErrorMessage),
+    /// Failed to access socket state.
+    #[error("failed to access socket state")]
+    SocketStateError,
 }

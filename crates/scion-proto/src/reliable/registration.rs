@@ -251,9 +251,13 @@ impl RegistrationExchange {
         if response.len() != RegistrationResponse::ENCODED_LENGTH {
             return Err(RegistrationError::InvalidResponseLength);
         }
-        let response = RegistrationResponse::decode(&mut response).unwrap();
+        let response = RegistrationResponse::decode(&mut response)
+            .map_err(|_| RegistrationError::InvalidResponse)?;
 
-        let request = self.request.take().unwrap();
+        let request = self
+            .request
+            .take()
+            .ok_or(RegistrationError::InvalidResponse)?;
 
         let requested_port = request.public_address.port();
         if requested_port != 0 && requested_port != response.assigned_port {
