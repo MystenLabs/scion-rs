@@ -6,8 +6,7 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "sunday"
+      interval: "monthly"
     commit-message:
       prefix: "fix"
       prefix-development: "chore"
