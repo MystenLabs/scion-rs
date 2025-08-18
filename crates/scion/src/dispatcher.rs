@@ -99,7 +99,7 @@ pub enum SendError {
     #[error(transparent)]
     Io(#[from] io::Error),
     /// The packet payload is too large to be sent.
-    #[error("payload is too large to be sent size={0}, max={}", u32::MAX)]
+    #[error("payload is too large to be sent size={0}, max={max}", max = u32::MAX)]
     PayloadTooLarge(usize),
 }
 
