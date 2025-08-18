@@ -718,7 +718,7 @@ mod tests {
             3,
             start.instant_to_utc(expiry_instant),
         );
-        strategy.handle_lookup_paths(&[path.clone()], start.instant());
+        strategy.handle_lookup_paths(slice::from_ref(&path), start.instant());
 
         strategy.set_min_path_validity(min_validity);
         let paths = get_paths(&strategy, strategy.remote_ia(), min_validity_instant).unwrap();

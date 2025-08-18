@@ -114,7 +114,7 @@ impl PathMetaHeader {
     /// This does *not* check that the `interface_index` is in range and provides meaningless
     /// results if the [`Self::segment_lengths`] are invalid but does not panic in those cases.
     pub fn hop_field_index_for_interface(&self, interface_index: usize) -> usize {
-        let actual_hop_index = (interface_index + 1) / 2;
+        let actual_hop_index = interface_index.div_ceil(2);
         match interface_index / 2 + 1 {
             // The interface is in the first segment
             x if x < self.segment_lengths[0].length() => actual_hop_index,

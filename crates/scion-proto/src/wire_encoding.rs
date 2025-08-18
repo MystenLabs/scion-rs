@@ -274,6 +274,8 @@ pub(crate) use bounded_uint;
 
 #[cfg(test)]
 mod tests {
+    use core::slice;
+
     use super::*;
 
     static BYTES: Bytes = Bytes::from_static(&[0, 1, 2, 3]);
@@ -291,7 +293,10 @@ mod tests {
 
     #[test]
     fn bytes_encoding_vec() {
-        assert_eq!([BYTES.clone()], BYTES.clone().encode_to_bytes_vec());
+        assert_eq!(
+            slice::from_ref(&BYTES),
+            BYTES.as_ref().encode_to_bytes_vec()
+        );
         assert_eq!(BYTES.clone().required_capacity(), 4);
         assert_eq!(BYTES.clone().total_length(), 4);
         assert_eq!(BYTES.clone().encode_to_bytes_vec()[0].len(), 4);
