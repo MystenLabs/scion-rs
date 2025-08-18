@@ -3,7 +3,7 @@
 //! Comparison between different checksum implementations.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use rand::{Fill, SeedableRng};
+use rand::{RngCore as _, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use scion_proto::packet::ChecksumDigest;
 
@@ -37,7 +37,7 @@ fn bench_checksum(c: &mut Criterion) {
 
     for length in [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536] {
         let mut input_vec = vec![0u8; length];
-        input_vec.try_fill(&mut rng).unwrap();
+        rng.fill_bytes(&mut input_vec);
         data.push((length, input_vec));
     }
 

@@ -9,9 +9,10 @@ publish = false
 prost = { workspace = true }
 prost-types = { workspace = true }
 tonic = { workspace = true }
+tonic-prost = { workspace = true }
 
 [build-dependencies]
-tonic-build = { workspace = true }
+tonic-prost-build = { workspace = true }
 
 [lib]
 bench = false
