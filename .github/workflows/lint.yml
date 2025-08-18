@@ -13,13 +13,13 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5
         with:
           fetch-depth: 0
       - name: Check commit messages
-        uses: aevea/commitsar@v0.20.2
+        uses: aevea/commitsar@916c7b483225a30d3a17f407fa25f5b25888ea69 # pin@v0.20
       - name: Check PR title
-        uses: amannn/action-semantic-pull-request@v6.0.1
+        uses: amannn/action-semantic-pull-request@fdd4d3ddf614fbcd8c29e4b106d3bbe0cb2c605d6 # pin@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -27,16 +27,16 @@ jobs:
     runs-on: ubuntu-latest
     name: Check editorconfig
     steps:
-      - uses: actions/checkout@v5
-      - uses: editorconfig-checker/action-editorconfig-checker@v2.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5
+      - uses: editorconfig-checker/action-editorconfig-checker@d2ed4fd072ae6f887e9407c909af0f585d2ad9f4 # pin@v2
       - run: editorconfig-checker
 
   typos:
     runs-on: ubuntu-latest
     name: Check spelling
     steps:
-      - uses: actions/checkout@v5
-      - uses: crate-ci/typos@v1.35.4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5
+      - uses: crate-ci/typos@a67079b4ae32e18c3f53d75368c52ce53b5fb56b # pin@v1.35.4
 
   check-all:
     name: Check if all lint jobs succeeded
@@ -48,6 +48,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Decide whether all needed jobs succeeded
-      uses: re-actors/alls-green@release/v1
+      uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # pin@v1
       with:
         jobs: ${{ toJSON(needs) }}
