@@ -48,7 +48,7 @@ jobs:
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Detect Changes
         uses: dorny/paths-filter@v3.0.2
         id: diff
@@ -67,7 +67,7 @@ jobs:
     if: ${{ needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           # do not check advisories to prevent sudden failure due to new announcement
@@ -79,7 +79,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: EmbarkStudios/cargo-deny-action@v2
 
   test:
@@ -93,7 +93,7 @@ jobs:
     env:
       RUSTC_BOOTSTRAP: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: "./.github/actions/setup-dependencies"
         with:
           save-cache: ${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
@@ -151,7 +151,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-ghcloud
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: "./.github/actions/setup-dependencies"
         with:
           save-cache: ${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
@@ -176,7 +176,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-ghcloud
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: "./.github/actions/setup-dependencies"
         with:
           save-cache: ${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
