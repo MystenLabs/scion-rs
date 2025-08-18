@@ -48,9 +48,9 @@ jobs:
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5
       - name: Detect Changes
-        uses: dorny/paths-filter@v3.0.2
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # pin@v3
         id: diff
         with:
           filters: |
@@ -67,8 +67,8 @@ jobs:
     if: ${{ needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5
+      - uses: EmbarkStudios/cargo-deny-action@f2ba7abc2abebaf185c833c3961145a3c275caad # pin@v2
         with:
           # do not check advisories to prevent sudden failure due to new announcement
           command: check bans licenses sources
@@ -79,8 +79,8 @@ jobs:
     if: ${{ github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5
+      - uses: EmbarkStudios/cargo-deny-action@f2ba7abc2abebaf185c833c3961145a3c275caad # pin@v2
 
   test:
     name: Test Rust code and report coverage
@@ -93,7 +93,7 @@ jobs:
     env:
       RUSTC_BOOTSTRAP: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5
       - uses: "./.github/actions/setup-dependencies"
         with:
           save-cache: ${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
@@ -110,12 +110,12 @@ jobs:
           cargo tarpaulin
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # pin@v4
         with:
           name: Coverage report
           path: tarpaulin-report.html
       - name: Code-coverage report
-        uses: irongut/CodeCoverageSummary@v1.3.0
+        uses: irongut/CodeCoverageSummary@51cc3a756ddcd398d447c044c02cb6aa83fdae95 # pin@v1
         with:
           filename: cobertura.xml
           badge: true
@@ -127,14 +127,14 @@ jobs:
           output: both
           thresholds: '50 75'
       - name: Add coverage PR comment
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # pin@v2
         if: ${{ github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
         with:
           path: code-coverage-results.md
 
       - name: Cache SCION binaries
         if: ${{ github.ref == 'refs/heads/main' && steps.scion.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # pin@v4
         with:
           path: ${{ steps.scion.outputs.scion-bin-path }}
           key: ${{ steps.scion.outputs.cache-primary-key }}
@@ -145,7 +145,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-ghcloud
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5
       - uses: "./.github/actions/setup-dependencies"
         with:
           save-cache: ${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
@@ -170,7 +170,7 @@ jobs:
     if: ${{ github.event_name == 'schedule' || needs.diff.outputs.isRust == 'true' }}
     runs-on: ubuntu-ghcloud
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5
       - uses: "./.github/actions/setup-dependencies"
         with:
           save-cache: ${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
@@ -190,7 +190,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Decide whether all needed jobs succeeded
-      uses: re-actors/alls-green@release/v1
+      uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # pin@v1
       with:
         allowed-skips: ${{ toJSON(needs) }}
         jobs: ${{ toJSON(needs) }}
