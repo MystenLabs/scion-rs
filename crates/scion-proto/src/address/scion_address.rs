@@ -2,7 +2,7 @@
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use super::{error::AddressKind, AddressParseError, HostAddr, IsdAsn, ServiceAddr};
+use super::{AddressParseError, HostAddr, IsdAsn, ServiceAddr, error::AddressKind};
 use crate::packet::AddressInfo;
 
 /// A SCION network address.

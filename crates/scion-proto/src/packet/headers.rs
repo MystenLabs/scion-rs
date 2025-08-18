@@ -182,9 +182,11 @@ mod tests {
         )?;
         let common_header = headers.common;
         assert_eq!(common_header.flow_id, 0x1_0003.into());
-        assert!(CommonHeader::SUPPORTED_VERSIONS
-            .iter()
-            .any(|v| v == &common_header.version));
+        assert!(
+            CommonHeader::SUPPORTED_VERSIONS
+                .iter()
+                .any(|v| v == &common_header.version)
+        );
         assert_eq!(common_header.header_length_factor, 9.try_into().unwrap());
         assert_eq!(common_header.path_type, PathType::Empty);
         assert_eq!(common_header.remaining_header_length(), 24);

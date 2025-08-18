@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use super::{error::AddressKind, AddressParseError};
+use super::{AddressParseError, error::AddressKind};
 
 /// A 48-bit SCION autonomous system (AS) number.
 ///

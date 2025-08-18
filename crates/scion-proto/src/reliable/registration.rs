@@ -31,8 +31,8 @@ use crate::{
     address::{HostType, IsdAsn, ServiceAddr, SocketAddr as ScionSocketAddr},
     datagram::UdpMessage,
     reliable::{
-        wire_utils::{encoded_address_and_port_length, encoded_address_length},
         ADDRESS_TYPE_OCTETS,
+        wire_utils::{encoded_address_and_port_length, encoded_address_length},
     },
 };
 
@@ -293,7 +293,10 @@ mod tests {
             exchange.register(address, &mut buffer)?;
             assert_eq!(
                 buffer,
-                [0x03, 17, 0, 1, 0xff, 0, 0, 0, 0, 0x01, 0, 80, 1, 10, 2, 3, 4].as_slice()
+                [
+                    0x03, 17, 0, 1, 0xff, 0, 0, 0, 0, 0x01, 0, 80, 1, 10, 2, 3, 4
+                ]
+                .as_slice()
             );
 
             let bound_address = exchange.handle_response(&[0, 80])?;
@@ -392,7 +395,9 @@ mod tests {
         test_successful!(
             public_ipv4_only,
             RegistrationRequest::new(parse!("1-ff00:0:1"), parse!("10.2.3.4:80")),
-            [0x03, 17, 0, 1, 0xff, 0, 0, 0, 0, 0x01, 0, 80, 1, 10, 2, 3, 4]
+            [
+                0x03, 17, 0, 1, 0xff, 0, 0, 0, 0, 0x01, 0, 80, 1, 10, 2, 3, 4
+            ]
         );
 
         test_successful!(
@@ -418,7 +423,9 @@ mod tests {
             public_ipv4_with_service,
             RegistrationRequest::new(parse!("1-ff00:0:1"), parse!("10.2.3.4:80"))
                 .with_associated_service(ServiceAddr::CONTROL),
-            [0x03, 17, 0, 1, 0xff, 0, 0, 0, 0, 0x01, 0, 80, 1, 10, 2, 3, 4, 0x00, 0x02]
+            [
+                0x03, 17, 0, 1, 0xff, 0, 0, 0, 0, 0x01, 0, 80, 1, 10, 2, 3, 4, 0x00, 0x02
+            ]
         );
 
         test_successful!(

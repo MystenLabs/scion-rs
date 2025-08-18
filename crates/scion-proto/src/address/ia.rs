@@ -5,7 +5,7 @@ use std::{
 
 use serde::Deserialize;
 
-use super::{error::AddressKind, AddressParseError, Asn, Isd};
+use super::{AddressParseError, Asn, Isd, error::AddressKind};
 
 /// The combined ISD and AS identifier of a SCION AS (sometimes abbreviated as IA).
 ///

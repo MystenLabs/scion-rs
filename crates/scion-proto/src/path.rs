@@ -265,7 +265,7 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
     use super::*;
-    use crate::path::metadata::{test_utils::*, PathInterface};
+    use crate::path::metadata::{PathInterface, test_utils::*};
 
     #[test]
     fn successful_empty_path() {

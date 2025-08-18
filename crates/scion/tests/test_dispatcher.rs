@@ -1,6 +1,6 @@
 //! Tests for the dispatcher.
 
-use scion::dispatcher::{get_dispatcher_path, DispatcherStream, RegistrationError};
+use scion::dispatcher::{DispatcherStream, RegistrationError, get_dispatcher_path};
 use scion_proto::address::SocketAddr;
 
 type TestError = Result<(), Box<dyn std::error::Error>>;

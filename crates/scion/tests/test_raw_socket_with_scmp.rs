@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use scion::{
-    daemon::{get_daemon_address, DaemonClient},
+    daemon::{DaemonClient, get_daemon_address},
     socket::RawSocket,
 };
 use scion_proto::{

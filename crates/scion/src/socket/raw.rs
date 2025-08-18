@@ -12,9 +12,9 @@ use scion_proto::{
 };
 use tokio::sync::Mutex;
 
-use super::{error::log_err, utils::check_buffers, BindError};
+use super::{BindError, error::log_err, utils::check_buffers};
 use crate::{
-    dispatcher::{get_dispatcher_path, DispatcherStream},
+    dispatcher::{DispatcherStream, get_dispatcher_path},
     pan::{ReceiveError, SendError},
 };
 

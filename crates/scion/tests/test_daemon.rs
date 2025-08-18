@@ -2,7 +2,7 @@
 
 use std::{env, str::FromStr};
 
-use scion::daemon::{get_daemon_address, DaemonClient};
+use scion::daemon::{DaemonClient, get_daemon_address};
 use scion_proto::address::IsdAsn;
 
 type TestError = Result<(), Box<dyn std::error::Error>>;

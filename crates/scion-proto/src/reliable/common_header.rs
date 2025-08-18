@@ -4,7 +4,7 @@ use std::net::{IpAddr, SocketAddr};
 
 use bytes::{Buf, BufMut};
 
-use super::{wire_utils::encoded_address_and_port_length, ADDRESS_TYPE_OCTETS};
+use super::{ADDRESS_TYPE_OCTETS, wire_utils::encoded_address_and_port_length};
 use crate::{address::HostType, packet::InadequateBufferSize, wire_encoding::WireEncode};
 
 /// Errors occurring during decoding of packets received over the reliable-relay protocol.
@@ -251,7 +251,9 @@ mod tests {
             ipv4_no_data,
             Some("10.2.3.4:80"),
             0,
-            [0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 0, 10, 2, 3, 4, 0, 80]
+            [
+                0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 0, 10, 2, 3, 4, 0, 80
+            ]
         );
 
         test_successful_encode!(
@@ -268,21 +270,27 @@ mod tests {
             ipv4_big_port_no_data,
             Some("10.2.3.4:65534"),
             0,
-            [0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 0, 10, 2, 3, 4, 0xff, 0xfe]
+            [
+                0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 0, 10, 2, 3, 4, 0xff, 0xfe
+            ]
         );
 
         test_successful_encode!(
             ipv4_good_payload,
             Some("127.0.0.1:22"),
             4,
-            [0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 4, 127, 0, 0, 1, 0, 22]
+            [
+                0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 4, 127, 0, 0, 1, 0, 22
+            ]
         );
 
         test_successful_encode!(
             max_payload_length,
             Some("127.0.0.2:88"),
             u32::MAX,
-            [0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0xff, 0xff, 0xff, 0xff, 127, 0, 0, 2, 0, 88]
+            [
+                0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0xff, 0xff, 0xff, 0xff, 127, 0, 0, 2, 0, 88
+            ]
         );
     }
 
@@ -306,7 +314,9 @@ mod tests {
 
         test_decode_error!(
             invalid_cookie,
-            [0xaa_u8, 0xbb, 0xaa, 0xbb, 0xaa, 0xbb, 0xaa, 0xbb, 0, 0, 0, 0, 0],
+            [
+                0xaa_u8, 0xbb, 0xaa, 0xbb, 0xaa, 0xbb, 0xaa, 0xbb, 0, 0, 0, 0, 0
+            ],
             DecodeError::InvalidCookie(0xaabbaabbaabbaabb)
         );
 
@@ -363,7 +373,9 @@ mod tests {
 
         test_successful_decode!(
             valid_with_ipv4,
-            [0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 1, 10, 2, 3, 4, 0, 80, 42],
+            [
+                0xde, 0, 0xad, 1, 0xbe, 2, 0xef, 3, 1, 0, 0, 0, 1, 10, 2, 3, 4, 0, 80, 42
+            ],
             CommonHeader {
                 destination: Some("10.2.3.4:80".parse().unwrap()),
                 payload_length: 1,

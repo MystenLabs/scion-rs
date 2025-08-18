@@ -4,7 +4,7 @@ use std::fmt::{Display, Pointer};
 
 use bytes::{Buf, BufMut, Bytes};
 
-use super::{ScmpDecodeError, ScmpMessageBase, ScmpMessageRaw, SCMP_PROTOCOL_NUMBER};
+use super::{SCMP_PROTOCOL_NUMBER, ScmpDecodeError, ScmpMessageBase, ScmpMessageRaw};
 use crate::{
     address::IsdAsn,
     packet::{AddressHeader, ChecksumDigest, InadequateBufferSize, MessageChecksum},

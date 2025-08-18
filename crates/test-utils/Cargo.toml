@@ -1,9 +1,9 @@
 [package]
+edition = { workspace = true }
+license = { workspace = true }
 name = "test-utils"
-version = "0.1.0"
-edition = "2021"
-license = "Apache-2.0"
 publish = false
+version = { workspace = true }
 
 [dependencies]
 
@@ -11,4 +11,4 @@ publish = false
 workspace = true
 
 [dev-dependencies]
-tokio = { version = "1.47.1", features = ["test-util", "tokio-macros", "macros"] }
+tokio = { workspace = true, features = ["test-util", "tokio-macros", "macros"] }

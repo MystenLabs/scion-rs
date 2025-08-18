@@ -2,7 +2,7 @@
 
 use bytes::{Buf, BufMut, Bytes};
 
-use super::{ScmpDecodeError, ScmpMessageBase, ScmpType, SCMP_PROTOCOL_NUMBER};
+use super::{SCMP_PROTOCOL_NUMBER, ScmpDecodeError, ScmpMessageBase, ScmpType};
 use crate::{
     packet::{AddressHeader, ChecksumDigest, InadequateBufferSize, MessageChecksum},
     wire_encoding::{WireDecode, WireEncodeVec},

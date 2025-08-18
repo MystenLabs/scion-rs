@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use super::{error::AddressKind, AddressParseError, HostAddr, HostType};
+use super::{AddressParseError, HostAddr, HostType, error::AddressKind};
 
 /// A SCION service address.
 ///

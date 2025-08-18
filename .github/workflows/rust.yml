@@ -97,7 +97,7 @@ jobs:
       - uses: "./.github/actions/setup-dependencies"
         with:
           save-cache: ${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
-      - run: cargo install cargo-tarpaulin@0.27.1
+      - run: cargo install cargo-tarpaulin@0.32.8
       - name: Install SCION and run local topology
         uses: "./.github/actions/setup-scion"
         with:
@@ -107,13 +107,7 @@ jobs:
       - name: Run tests (including integration tests) and record coverage
         run: >
           SCION_DAEMON_ADDRESS=${{ steps.scion.outputs.daemon-address-as111 }}
-          cargo tarpaulin --workspace --skip-clean
-          --lib --bins --examples --tests --doc
-          --out html --out xml
-          --exclude-files "crates/scion-grpc/*"
-          --exclude-files "crates/**/tests/*"
-          --exclude-files "crates/**/benches/*"
-          -- --include-ignored
+          cargo tarpaulin
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
