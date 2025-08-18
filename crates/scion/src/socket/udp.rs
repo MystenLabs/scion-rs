@@ -1,7 +1,8 @@
 //! A socket to send UDP datagrams via SCION.
 
 use std::{
-    cmp, io,
+    cmp,
+    io,
     sync::{Arc, RwLock},
 };
 
