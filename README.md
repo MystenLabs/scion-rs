@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> This repository is no longer maintained. For a Rust library implementing the SCION endhost stack,
+> please see [Anapaya/scion-sdk](https://github.com/Anapaya/scion-sdk), which is partially based on
+> this library.
+
 # SCION in Rust
 
 This library provides an end-host networking stack for SCION and can be used in Rust applications to communicate over a
